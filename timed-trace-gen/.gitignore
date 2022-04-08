@@ -106,5 +106,7 @@ venv.bak/
 input/*
 out_wiki/*
 out_ths/*
+out_latencies/*
+processed/*
 
 !input/PLACEHOLDER
