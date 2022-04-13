@@ -1,8 +1,9 @@
 import numpy as np 
 
-from math import fsum
+from math import fsum, inf
 
 import tarfile
+import datetime
 
 from os.path import *
 from os import path, listdir, makedirs
@@ -10,53 +11,85 @@ from os import path, listdir, makedirs
 from typing import Generator, List, Dict
 
 from utils import Colors, Timer
+from json import dump
 
-FloatGenerator = Generator[float, None, None]
+# FloatGenerator = Generator[float, None, None]
 
 INPUT_DIR = './processed'
 OUTPUT_DIR = './out_latencies'
 
-class DistGenerators():
-    @staticmethod
-    def create_normal(mean: float, std_div: float) -> FloatGenerator:
-        random_gen = np.random.default_rng()
-        def gen_next():
-            while True:
-                val = random_gen.normal(mean, std_div)
-                yield max(val, mean - 3 * std_div, 5), mean
-        
-        return gen_next()
-    
-    @staticmethod
-    def create_uniform(low: float, high: float) -> FloatGenerator:
-        mean = (low + high * 1.0) / 2
-        random_gen = np.random.default_rng()
-        def gen_next():
-            while True:
-                yield random_gen.uniform(low, high), mean
+RANDOM_BATCH_SIZE = 10000000
 
-        return gen_next()
-    
-    @staticmethod
-    def create_two_peaks(low_val: float, high_val: float, prob: float) -> FloatGenerator:
-        values = [low_val, high_val]
-        mean = low_val * prob + high_val * (1 - prob)
-        probs = [prob, 1 - prob]
+class NormalDist():
+    def __init__(self, mean: float, std_div: float):
+        self._std_div = std_div
+        self._random_gen = np.random.default_rng()
         
-        def gen_next():
-            while True:
-                yield np.random.choice(values, p=probs), mean
-                
-        return gen_next()
+        self.mean = mean
 
-    @staticmethod
-    def create_single_val(val: float) -> FloatGenerator:
-        def gen_next():
-            while True:
-                yield val, val
-                
-        return gen_next()
+        self.refill_values()
     
+    def refill_values(self):
+        self.index = 0
+        self.gen_values = self._random_gen.normal(self.mean, self._std_div, size=RANDOM_BATCH_SIZE)
+        
+        for i in range(RANDOM_BATCH_SIZE):
+            val = self.gen_values[i]
+            self.gen_values[i] = max(val, self.mean - 3 * self._std_div, 5)
+    
+    def __str__(self):
+        return f'Normal with mean {self.mean} and sigma {self._std_div}'
+
+
+class UniformDist():
+    def __init__(self, low: float, high: float):
+        self._low = low
+        self._high = high
+        self._random_gen = np.random.default_rng()
+        
+        self.mean = (low + high * 1.0) / 2
+
+        self.refill_values()
+        
+    def refill_values(self):
+        self.index = 0
+        self.gen_values = self._random_gen.uniform(self._low, self._high, size=RANDOM_BATCH_SIZE)
+        
+    def __str__(self):
+        return f'Uniform between {self._low} and {self._high}'
+    
+
+class TwoPeakDist():
+    def __init__(self, low_val: float, high_val: float, prob: float):
+        self._values = [low_val, high_val]
+        self._probs = [prob, 1 - prob]
+        
+        self.mean = low_val * prob + high_val * (1 - prob)
+        
+        self.refill_values()
+    
+    def refill_values(self):
+        self.index = 0
+        self.gen_values = np.random.choice(self._values, p=self._probs, size=RANDOM_BATCH_SIZE)
+        
+    def __str__(self):
+        return f'Two Peaks with values {self._values} at probabilty {self._probs}'
+       
+     
+class SingleValueDist():
+    def __init__(self, val: float):
+        self.mean = val
+        self.gen_values = [val] * RANDOM_BATCH_SIZE
+        
+        self.refill_values()
+        
+        
+    def refill_values(self):
+        self.index = 0
+    
+    def __str__(self):
+        return f'Single Value of {self.mean}'
+
 
 def compressTrace(output_file_name: str, should_remove=False):
     with Timer(msg='compression') as t:
@@ -68,26 +101,36 @@ def compressTrace(output_file_name: str, should_remove=False):
 
       
 class KeyInfo():
-    def __init__(self, dist_generator: FloatGenerator):
+    def __init__(self, dist_generator):
         self.dist_gen = dist_generator
         self.occurences = 1
-        
-def printHistograms(latency_values: np.array, keysTimeDistDict: Dict[str, KeyInfo], run_num: int):
-    latencies_histogram = np.histogram(all_values, bins=[0, 10, 100, 1000, 10000])
-    print(f'Latencies of run num {run_num} is:\n{str(latencies_histogram)}')
+
+
+def writeMetaData(fname: str, time_generators: List, cluster_dists: List[float], latency_values: np.array, keysTimeDistDict: Dict[str, KeyInfo], run_num: int):
+    cluster_data = [{'probability': cluster_dists[i], 'dist info': str(time_generators[i])} for i in range(len(time_generators))]
+    
+    latencies_histogram, latencies_bins = np.histogram(latency_values, bins=[0, 10, 100, 1000, 10000, inf])
+    latencies_data = [{'histogram': latencies_histogram.tolist(), 'bins': latencies_bins.tolist()}]
     
     occurences_aggregate = [key_info.occurences for key_info in keysTimeDistDict.values()]
-    occurences_histogram = np.histogram(occurences_aggregate, bins=[0, 1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 100, 1000, 10000])
-    print(f'Key occurences histogram is:\n{str(occurences_histogram)}')
+    occurences_histogram, occurences_bins = np.histogram(occurences_aggregate, bins=[1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 100, 1000, 10000, inf])
+    occurences_data = [{'histogram': occurences_histogram.tolist(), 'bins': occurences_bins.tolist()}]
+    
+    data = {'clusters data': cluster_data, 'latencies data': latencies_data, 'occurences data': occurences_data}
+    
+    with open(f'{fname}_conf{run_num}.json', 'w') as jsonFile:
+        dump(data, jsonFile, indent=4)
+
         
-        
-def addDelayAndWriteToFile(fnames: List[str], time_generators: List[FloatGenerator], 
+def addDelayAndWriteToFile(fnames: List[str], time_generators: List, 
                            cluster_dists: List[float], run_num: int, hit_penalty=1):
     latency_values = np.array([])
     
     keysTimeDistDict : Dict[str, KeyInfo] = dict()
     
-    output_file_name = f'{OUTPUT_DIR}/latency_penalties_{run_num}'
+    current_time = datetime.datetime.now()
+    
+    output_file_name = f'{OUTPUT_DIR}/latency_p{run_num}_{current_time.hour}{current_time.minute}{current_time.second}{current_time.day}{current_time.month}'
     
     with open(f'{output_file_name}.trace', 'w') as outputFile:
         for fname in fnames:
@@ -111,7 +154,11 @@ def addDelayAndWriteToFile(fnames: List[str], time_generators: List[FloatGenerat
                         dist_gen = time_generators[chosen_cluster]
                         keysTimeDistDict[key] = KeyInfo(dist_gen)
                     
-                    delay, mean = next(dist_gen)
+                    delay, mean = dist_gen.gen_values[dist_gen.index], dist_gen.mean
+                    dist_gen.index += 1
+                    
+                    if dist_gen.index >= RANDOM_BATCH_SIZE:
+                        dist_gen.refill_values()
                     
                     current_file_latencies[idx] = delay
                     
@@ -123,7 +170,7 @@ def addDelayAndWriteToFile(fnames: List[str], time_generators: List[FloatGenerat
 
                 latency_values = np.concatenate((latency_values, current_file_latencies))
     
-    printHistograms(latency_values, keysTimeDistDict, run_num)
+    writeMetaData(output_file_name, time_generators, cluster_dists, latency_values, keysTimeDistDict, run_num)
     
     # compressTrace(output_file_name)
         
@@ -147,10 +194,20 @@ def main():
     #                     NormalDist(100, 64),
     #                     NormalDist(120, 64)]]
     
-    cluster_dists = [[0.7, 0.3]] # , [0.5, 0.5], [0.7, 0.3]]
-    time_generators = [[DistGenerators.create_two_peaks(5, 5000, 0.9), DistGenerators.create_single_val(50)]]
-                    #    [DistGenerators.create_two_peaks(5, 5000, 0.2), DistGenerators.create_single_val(4500)],
-                    #    [DistGenerators.create_two_peaks(5, 5000, 0.2), DistGenerators.create_single_val(4500)]]
+    # cluster_dists = [[0.7, 0.3] , [0.5, 0.5], [0.7, 0.3], [0.5, 0.5]]
+    # time_generators = [[DistGenerators.create_two_peaks(5, 5000, 0.9), DistGenerators.create_single_val(50)],
+    #                    [DistGenerators.create_two_peaks(5, 5000, 0.2), DistGenerators.create_single_val(4500)],
+    #                    [DistGenerators.create_two_peaks(5, 5000, 0.2), DistGenerators.create_single_val(4500)],
+    #                    [DistGenerators.create_two_peaks(5, 1000000, 0.9999), DistGenerators.create_single_val(50)]]
+    
+    # cluster_dists = [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]]
+    # time_generators = [[TwoPeakDist(5, 5000, 0.9), SingleValueDist(50)],
+    #                    [TwoPeakDist(5, 500, 0.9), SingleValueDist(50)],
+    #                    [TwoPeakDist(5, 100, 0.9), SingleValueDist(10)],
+    #                    [TwoPeakDist(5, 50, 0.9), SingleValueDist(10)]]
+    
+    cluster_dists = [[0.5, 0.5]]
+    time_generators = [[TwoPeakDist(5, 1000000, 0.9999), SingleValueDist(50)]]
     
     for i in range(len(cluster_dists)):
         verifyDists(cluster_dists[i], len(time_generators[i]))
