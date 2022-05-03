@@ -2,18 +2,20 @@ import numpy as np
 
 from math import fsum, inf
 
-import tarfile
+import argparse
 import datetime
+import tarfile
+import tqdm
 
 from os.path import *
 from os import path, listdir, makedirs
 
 from typing import Generator, List, Dict
 
+from functools import reduce
+
 from utils import Colors, Timer
 from json import dump
-
-# FloatGenerator = Generator[float, None, None]
 
 INPUT_DIR = './processed'
 OUTPUT_DIR = './out_latencies'
@@ -48,7 +50,6 @@ class UniformDist():
         self._random_gen = np.random.default_rng()
         
         self.mean = (low + high * 1.0) / 2
-
         self.refill_values()
         
     def refill_values(self):
@@ -65,7 +66,6 @@ class TwoPeakDist():
         self._probs = [prob, 1 - prob]
         
         self.mean = low_val * prob + high_val * (1 - prob)
-        
         self.refill_values()
     
     def refill_values(self):
@@ -74,7 +74,23 @@ class TwoPeakDist():
         
     def __str__(self):
         return f'Two Peaks with values {self._values} at probabilty {self._probs}'
-       
+
+
+class MultiplePeaksDist():
+    def __init__(self, values : List[float], probs : List[float]):
+        self._values = values
+        self._probs = probs
+        
+        self.mean = reduce(lambda acc, curr: acc + curr[0] * curr[1], zip(self._values, self._probs), 0)
+        self.refill_values()
+    
+    def refill_values(self):
+        self.index = 0
+        self.gen_values = np.random.choice(self._values, p=self._probs, size=RANDOM_BATCH_SIZE)
+        
+    def __str__(self):
+        return f'{len(self._values)} Peaks with values {self._values} and probabilty {self._probs}'
+
      
 class SingleValueDist():
     def __init__(self, val: float):
@@ -106,7 +122,7 @@ class KeyInfo():
         self.occurences = 1
 
 
-def writeMetaData(fname: str, time_generators: List, cluster_dists: List[float], latency_values: np.array, keysTimeDistDict: Dict[str, KeyInfo], run_num: int):
+def writeMetaData(fname: str, time_generators: List, cluster_dists: List[float], latency_values: np.array, keysTimeDistDict: Dict[str, KeyInfo]):
     cluster_data = [{'probability': cluster_dists[i], 'dist info': str(time_generators[i])} for i in range(len(time_generators))]
     
     latencies_histogram, latencies_bins = np.histogram(latency_values, bins=[0, 10, 100, 1000, 10000, inf])
@@ -118,29 +134,32 @@ def writeMetaData(fname: str, time_generators: List, cluster_dists: List[float],
     
     data = {'clusters data': cluster_data, 'latencies data': latencies_data, 'occurences data': occurences_data}
     
-    with open(f'{fname}_conf{run_num}.json', 'w') as jsonFile:
+    with open(f'{fname}_conf.json', 'w') as jsonFile:
         dump(data, jsonFile, indent=4)
 
         
-def addDelayAndWriteToFile(fnames: List[str], time_generators: List, 
-                           cluster_dists: List[float], run_num: int, hit_penalty=1):
+def addDelayAndWriteToFile(fnames: List[str], time_generators: List, cluster_dists: List[float], 
+                           verbose: bool, compress: bool, hit_penalty=1):
     latency_values = np.array([])
     
     keysTimeDistDict : Dict[str, KeyInfo] = dict()
     
     current_time = datetime.datetime.now()
     
-    output_file_name = f'{OUTPUT_DIR}/latency_p{run_num}_{current_time.hour}{current_time.minute}{current_time.second}{current_time.day}{current_time.month}'
+    if len(fnames) > 1:
+        output_file_name = f'{OUTPUT_DIR}/latency_{current_time.strftime("%H%M%S_%d%m%Y")}'
+    else:
+        output_file_name = f'{OUTPUT_DIR}/{fnames[0]}_{current_time.strftime("%H%M%S_%d%m%Y")}'
     
     with open(f'{output_file_name}.trace', 'w') as outputFile:
-        for fname in fnames:
+        for fname, _ in zip(fnames, tqdm.tqdm(range(len(fnames)), colour='yellow', leave=False)):
             with open(f'{INPUT_DIR}/{fname}') as inputFile:
                 lines = inputFile.readlines()
                 num_of_lines = len(lines)
                 
                 current_file_latencies = np.zeros(num_of_lines)                
                 
-                for idx in range(num_of_lines):
+                for idx in tqdm.trange(num_of_lines, colour='cyan', leave=False):
                     line = lines[idx]
                     key = line.strip('\n ')
                     
@@ -154,6 +173,10 @@ def addDelayAndWriteToFile(fnames: List[str], time_generators: List,
                         dist_gen = time_generators[chosen_cluster]
                         keysTimeDistDict[key] = KeyInfo(dist_gen)
                     
+                    """
+                    Here, using the fields instead of functions in order to reduce the call time.
+                    Moreover, the usage of batches lowers the computation time by 90%!
+                    """
                     delay, mean = dist_gen.gen_values[dist_gen.index], dist_gen.mean
                     dist_gen.index += 1
                     
@@ -164,15 +187,17 @@ def addDelayAndWriteToFile(fnames: List[str], time_generators: List,
                     
                     outputFile.write(f'{key} {hit_penalty} {delay} {mean}\n')
                 
-                print(f'{Colors.orange}Added latencies to {Colors.cyan}{len(lines):,} '
-                    + f'{Colors.orange} lines with {Colors.cyan}{len(keysTimeDistDict):,}'
-                    + f'{Colors.orange} unique entries so far{Colors.reset}')
+                if (verbose):
+                    print(f'{Colors.orange}Added latencies to {Colors.cyan}{len(lines):,} '
+                        + f'{Colors.orange} lines with {Colors.cyan}{len(keysTimeDistDict):,}'
+                        + f'{Colors.orange} unique entries so far{Colors.reset}')
 
                 latency_values = np.concatenate((latency_values, current_file_latencies))
     
-    writeMetaData(output_file_name, time_generators, cluster_dists, latency_values, keysTimeDistDict, run_num)
+    writeMetaData(output_file_name, time_generators, cluster_dists, latency_values, keysTimeDistDict)
     
-    # compressTrace(output_file_name)
+    if (compress):
+        compressTrace(output_file_name)
         
 def verifyDists(cluster_dist: List[float], num_of_generators : int):
     dist_sum: float = fsum(cluster_dist)
@@ -182,32 +207,16 @@ def verifyDists(cluster_dist: List[float], num_of_generators : int):
         
         
 def main():
-    # cluster_dists = [[0.25, 0.5, 0.25], [0.4, 0.2, 0.2, 0.2], [0.4, 0.35, 0.25]] # precentage of requestes with this index range of times
-    # time_generators = [[UniformDist(50, 150),
-    #                     UniformDist(125, 250),
-    #                     UniformDist(200, 300)],
-    #                    [UniformDist(50, 200),
-    #                     NormalDist(64, 12),
-    #                     NormalDist(96, 12),
-    #                     NormalDist(128, 18)],
-    #                    [NormalDist(80, 64),
-    #                     NormalDist(100, 64),
-    #                     NormalDist(120, 64)]]
+    parser = argparse.ArgumentParser()
     
-    # cluster_dists = [[0.7, 0.3] , [0.5, 0.5], [0.7, 0.3], [0.5, 0.5]]
-    # time_generators = [[DistGenerators.create_two_peaks(5, 5000, 0.9), DistGenerators.create_single_val(50)],
-    #                    [DistGenerators.create_two_peaks(5, 5000, 0.2), DistGenerators.create_single_val(4500)],
-    #                    [DistGenerators.create_two_peaks(5, 5000, 0.2), DistGenerators.create_single_val(4500)],
-    #                    [DistGenerators.create_two_peaks(5, 1000000, 0.9999), DistGenerators.create_single_val(50)]]
+    parser.add_argument('-c', '--compress', help="Compress the newly created traces files", action='store_true')
+    parser.add_argument('-v', '--verbose', help='Prints the time elapsed and number of unique entries for each file, in addition to the progress bar', action='store_true')
     
-    # cluster_dists = [[0.5, 0.5], [0.5, 0.5], [0.5, 0.5], [0.5, 0.5]]
-    # time_generators = [[TwoPeakDist(5, 5000, 0.9), SingleValueDist(50)],
-    #                    [TwoPeakDist(5, 500, 0.9), SingleValueDist(50)],
-    #                    [TwoPeakDist(5, 100, 0.9), SingleValueDist(10)],
-    #                    [TwoPeakDist(5, 50, 0.9), SingleValueDist(10)]]
+    args = parser.parse_args()
     
-    cluster_dists = [[0.5, 0.5]]
-    time_generators = [[TwoPeakDist(5, 1000000, 0.9999), SingleValueDist(50)]]
+    cluster_dists = [[1]]
+    
+    time_generators = [[MultiplePeaksDist([75, 300, 1000], [0.8, 0.15, 0.05])]]
     
     for i in range(len(cluster_dists)):
         verifyDists(cluster_dists[i], len(time_generators[i]))
@@ -216,9 +225,9 @@ def main():
     
     makedirs(OUTPUT_DIR, exist_ok=True)
     
-    for i in range(len(time_generators)):
-        with Timer(f'penalties configuartion No. {i + 1}'):
-            addDelayAndWriteToFile(input_files_paths, time_generators[i], cluster_dists[i], i+1)
+    with Timer():
+        for i in tqdm.trange(len(time_generators), colour='magenta', leave=False):
+            addDelayAndWriteToFile(input_files_paths, time_generators[i], cluster_dists[i], verbose=args.verbose, compress=args.compress)
             
 if __name__ == '__main__':
     main()
