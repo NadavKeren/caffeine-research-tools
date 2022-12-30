@@ -15,6 +15,7 @@ from pprint import pprint
 import matplotlib.pyplot as plt
 import pickle
 
+
 with open(os.path.join(os.path.dirname(__file__), 'conf.json')) as conf_file:
     local_conf = json.load(conf_file)
 caffeine_root = local_conf['caffeine_root']
@@ -22,22 +23,35 @@ resources_path = local_conf['resources'] if local_conf['resources'] else caffein
 output_path = local_conf['output'] if local_conf['output'] else os.getcwd() + os.sep
 output_csvs_path = output_path + 'csvs' + os.sep
 
+
 class Admission(Enum):
     ALWAYS = 'Always'
     TINY_LFU = 'TinyLfu'
 
-def single_run(policy, trace, size=4, changes={}, name=None, save=True, reuse=False, verbose=False, readonly=False):
+
+def single_run(policy, trace:str=None, trace_file:str=None, trace_folder:str=None, trace_format:str=None, 
+               size:int=4, additional_settings:dict={}, name:str=None, save:bool=True, 
+               reuse:bool=False, verbose:bool=False, readonly:bool=False):
+    if (trace is None and (trace_file is None or trace_folder is None or trace_format is None)):
+        raise ValueError('Either trace or ALL trace_file, trace_folder and trace_format must be provided')
+    
     name = name if name else policy
     policy = Policy[policy]
-    trace = Trace[trace]
-    if 0 < size < 9:
-        size = trace.typical_caches()[size-1]
+    
+    if trace is not None:
+        trace = Trace[trace]
+        if 0 < size < 9:
+            size = trace.typical_caches()[size-1]
+    
     conf_path = caffeine_root + 'simulator{0}src{0}main{0}resources{0}'.format(os.sep)
     conf_file = conf_path + 'application.conf'
+    
     if not os.path.exists(output_csvs_path):
         os.makedirs(output_csvs_path)
-    run_simulator = './gradlew simulator:run -x caffeine:compileJava -x caffeine:compileCodeGenJava'
-#   run_simulator = './gradlew simulator:run'
+        
+    run_simulator_cmd = './gradlew simulator:run -x caffeine:compileJava -x caffeine:compileCodeGenJava'
+#   run_simulator_cmd = './gradlew simulator:run' 
+
     if os.path.exists(conf_file):
         conf = ConfigFactory.parse_file(conf_file)
     else:
@@ -48,9 +62,18 @@ def single_run(policy, trace, size=4, changes={}, name=None, save=True, reuse=Fa
                                           }
                                           """)
     simulator = conf['caffeine']['simulator']
-    simulator.put('files.paths', [ resources_path + trace.format() + os.sep + trace.file() ])
-             
-    simulator.put('files.format', trace.value['format'])
+    
+    if (trace is not None):
+        if (trace_file is not None or trace_format is not None):
+            print('Warning: Due to multiple definitions of trace origin, using only the default trace values')
+            
+        trace_file = trace.value['file']
+        trace_folder = trace.value['format']
+        trace_format = trace.value['format']
+    
+    simulator.put('files.paths', [ resources_path + trace_folder + os.sep + trace_file ])
+    
+    simulator.put('files.format', trace_format)
     simulator.put('maximum-size', size)
     simulator.put('policies', [ policy.value ])
     simulator.put('admission', [ Admission.ALWAYS.value ])
@@ -60,25 +83,28 @@ def single_run(policy, trace, size=4, changes={}, name=None, save=True, reuse=Fa
         simulator.put('report.output', 'console')
     else:
         simulator.put('report.format', 'csv')
-        simulator.put('report.output', output_csvs_path + '{}-{}-{}.csv'.format(trace.name,size,name))
+        simulator.put('report.output', output_csvs_path + f'{trace_file}-{size}-{name}.csv')
 
-    for k,v in changes.items():
+    for k,v in additional_settings.items():
         simulator.put(k,v)
 
     with open(conf_file, 'w') as f:
         f.write(HOCONConverter.to_hocon(conf))
     if (not reuse or not os.path.isfile(simulator['report']['output'])) and not readonly:
-        retcode = call(run_simulator, shell = True, cwd = caffeine_root, stdout = subprocess.DEVNULL if not verbose else None)
+        retcode = call(run_simulator_cmd, shell = True, cwd = caffeine_root, stdout = subprocess.DEVNULL if not verbose else None)
         if (not retcode == 0):
             return False
     
     if not verbose:
         with open(simulator['report']['output'], 'r') as csvfile:
             reader = csv.DictReader(csvfile)
-            results = { line['Policy'] : float(line['Hit Rate']) for line in reader }
+            results = { line['Policy'] : (f"{float(line['Hit Rate']):.2f}%", float(line['Average Penalty']), float(line['Average Penalty not including delayed hits'])) for line in reader }
+        
         if not save:
             os.remove(simulator['report']['output'])
+            
         return results if len(results) != 1 else list(results.values())[0]
+
 
 def download_single_trace(trace, path=None):
         if not path:

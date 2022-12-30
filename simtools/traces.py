@@ -40,6 +40,8 @@ class Trace(Enum):
     l_normal_single_32      = { 'file' : 'wiki_single_32_4.xz', 'format' : 'latency', 'typical_caches' : small_caches}
     l_normal_single_1024    = { 'file' : 'wiki_single_1024_256.xz', 'format' : 'latency', 'typical_caches' : small_caches}
     l_uniform_single_50_150 = { 'file' : 'wiki_single_50_150U.xz', 'format' : 'latency', 'typical_caches' : small_caches}
+    # latency_with_factors    = [{'file' : f'diff_factor_{x}.xz', 'format' : 'latency', 'typical_caches' : medium_caches} for x in range(2, 20)]
+    latency_with_factor_2 =   {'file' : 'diff_factor_2.0.xz', 'format' : 'latency', 'typical_caches' : medium_caches}
 
     SCARAB_RECS_EX = { 'file' : 'recs.trace.20160808T073231Z.xz', 'format' : 'scarab', 'typical_caches' : medium_caches, 'extra_url' : 'http://download.scarabresearch.com/cache-traces/' }
 

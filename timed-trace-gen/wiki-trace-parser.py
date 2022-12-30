@@ -3,7 +3,7 @@ import mmh3
 from os.path import *
 from os import path, listdir, makedirs
 
-from typing import Generator, List, Dict
+from typing import List
 
 from utils import Timer
 
