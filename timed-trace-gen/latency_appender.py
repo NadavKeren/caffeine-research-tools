@@ -3,9 +3,11 @@ import numpy as np
 import argparse
 import datetime
 import tqdm
+import re
 
 from os.path import *
 from os import path, listdir, makedirs
+from subprocess import run
 
 from typing import List, Dict
 
@@ -16,7 +18,10 @@ from latency_generators import *
 
 
 def addDelayAndWriteToFile(input_path: str, output_path: str, fnames: List[str], key_base: int, time_generators: List, cluster_dists: List[float], 
-                           verbose: bool, compress: bool, gen_timestamps: bool, hit_penalty=1, set_name: str = None):
+                           verbose: bool, compress: bool, gen_timestamps: bool, hit_penalty=1, set_name: str = None, seed: int = None):
+    if seed is not None:
+        np.random.seed(seed)
+    
     latency_values = np.array([])
     
     keysTimeDistDict : Dict[str, KeyInfo] = dict()
@@ -91,8 +96,15 @@ def addDelayAndWriteToFile(input_path: str, output_path: str, fnames: List[str],
     writeMetaData(output_file_name, time_generators, cluster_dists, latency_values, keysTimeDistDict)
     
     if (compress):
-        compressTrace(output_file_name)
+        compressTrace(output_file_name, should_remove=True)
         
+    
+def get_trace_name(fname: str):
+    name = re.findall('Trace0[0-9][0-9]', fname)
+    
+    return name[0].lower()
+
+
         
 def main():
     parser = argparse.ArgumentParser()
@@ -103,43 +115,36 @@ def main():
     parser.add_argument('-o', '--output-dir', help='The path for the newly created files', type=str, default=None)
     parser.add_argument('-t', '--contains-timestamps', help='Toggle whether the file contains timestamps', action='store_true')
     parser.add_argument('-b', '--key-base', help='The base of the key string', type=int, default=10)
+    parser.add_argument('--time', type=int, required=False, help='The second dist time in two-dist generation')
     
     args = parser.parse_args()
+    
+    print(f'Given args: {str(args)}')
     
     INPUT_DIR = args.input_dir if args.input_dir else './processed'
     OUTPUT_DIR = args.output_dir if args.output_dir else './out_latencies'
     
-    # tested_factors = list(chain(range(10, 100, 10), range(100, 500, 50), range(500, 2000, 250))) #, range(2000, 10000, 1000)))
-    
-    # time_generators = [[MultiplePeaksDist([10, 75], [0.8, 0.2]), MultiplePeaksDist([10, 75 * factor], [0.8, 0.2])] 
-    #                    for factor in tested_factors]
-    # cluster_dists = [[0.5, 0.5] for i in range(len(time_generators))]
-    
-    # time_generators = [[SingleValueDist(time)] for time in times]
-    
-    # if (not (len(time_generators) == len(cluster_dists))) or (not (sets_names is not None and len(time_generators) == len(sets_names))):
-    #     raise ValueError(f'Number of cluster dist configurations: {len(cluster_dists)} and number of time generators configurations: {len(time_generators)}, ' 
-    #                      + 'or number of sets names mismatch')
-    
-    # for i in range(len(cluster_dists)):
-    #     verifyDists(cluster_dists[i], len(time_generators[i]))
+
+    times = [args.time] if args.time is not None else [100, 200, 400, 800]
+    seeds = {'trace018' : 2867, 'trace005' : 22874, 'trace000' : 36661, 'trace045' : 4150,
+             'trace036' : 45755, 'trace012' : 32153, 'trace024' : 23516, 'trace031' : 38080,
+             'trace049' : 57461, 'trace034' : 33022, 'trace044' : 7033, 'trace029' : 38573,
+             'trace010' : 43215}
+    input_files_paths = [f for f in listdir(INPUT_DIR) if 'Trace018' not in f and 'Trace005' not in f]
+    input_files_with_names = [(f, time, get_trace_name(f), f'IBMOS_{get_trace_name(f)}_50_{time}') 
+                              for f in input_files_paths 
+                              for time in times]
         
-    times = [100, 1000, 10000]
-    input_files_paths = [f for f in listdir(INPUT_DIR)]
-    sets_names = [f'{file}_t_{time}' for file in input_files_paths for time in times]
-    
-    print(input_files_paths)
-    
     makedirs(OUTPUT_DIR, exist_ok=True)
     
     with Timer():
-        with tqdm.tqdm(total = len(times) * len(input_files_paths)) as progressbar:
-            for time in times:
-                for f in input_files_paths:
-                    print(f)
-                    addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, [f], args.key_base, [SingleValueDist(time)], [1], gen_timestamps=not args.contains_timestamps, 
-                                           verbose=args.verbose, compress=args.compress, set_name=f'{f}_t_{time}')
-                    progressbar.update(1)
+        with tqdm.tqdm(total = len(input_files_with_names)) as progressbar:
+            for (file, time, trace_name, set_name) in input_files_with_names:
+                seed = seeds[trace_name]
+                addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, [file], args.key_base, [SingleValueDist(50), SingleValueDist(time)], 
+                                       [0.5, 0.5], gen_timestamps=not args.contains_timestamps, verbose=args.verbose, 
+                                       compress=args.compress, set_name=set_name, seed=seed)
+                progressbar.update(1)
 
  
 if __name__ == '__main__':

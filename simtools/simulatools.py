@@ -12,6 +12,7 @@ from pyhocon import ConfigTree
 from pyhocon import HOCONConverter
 from enum import Enum
 from pprint import pprint
+import pandas as pd
 import matplotlib.pyplot as plt
 import pickle
 
@@ -29,13 +30,14 @@ class Admission(Enum):
     TINY_LFU = 'TinyLfu'
 
 
-def single_run(policy, trace:str=None, trace_file:str=None, trace_folder:str=None, trace_format:str=None, 
-               size:int=4, additional_settings:dict={}, name:str=None, save:bool=True, 
-               reuse:bool=False, verbose:bool=False, readonly:bool=False):
+def single_run(policy, trace:str=None, trace_file:str=None, trace_folder:str=None, 
+               trace_format:str=None, size:int=4, additional_settings:dict={}, name:str=None, 
+               save:bool=True, reuse:bool=False, verbose:bool=False, readonly:bool=False, 
+               seed:int=1033096058):
     if (trace is None and (trace_file is None or trace_folder is None or trace_format is None)):
         raise ValueError('Either trace or ALL trace_file, trace_folder and trace_format must be provided')
     
-    name = name if name else policy
+    name = name if name else f'{trace_file}-{size}-{policy}'
     policy = Policy[policy]
     
     if trace is not None:
@@ -71,19 +73,20 @@ def single_run(policy, trace:str=None, trace_file:str=None, trace_folder:str=Non
         trace_folder = trace.value['format']
         trace_format = trace.value['format']
     
-    simulator.put('files.paths', [ resources_path + trace_folder + os.sep + trace_file ])
+    simulator.put('files.paths', [ resources_path + os.sep + trace_folder + os.sep + trace_file ])
     
     simulator.put('files.format', trace_format)
     simulator.put('maximum-size', size)
     simulator.put('policies', [ policy.value ])
     simulator.put('admission', [ Admission.ALWAYS.value ])
+    simulator.put('random-seed', seed)
     
     if verbose:
         simulator.put('report.format', 'table')
         simulator.put('report.output', 'console')
     else:
         simulator.put('report.format', 'csv')
-        simulator.put('report.output', output_csvs_path + f'{trace_file}-{size}-{name}.csv')
+        simulator.put('report.output', output_csvs_path + f'{name}.csv')
 
     for k,v in additional_settings.items():
         simulator.put(k,v)
@@ -97,13 +100,12 @@ def single_run(policy, trace:str=None, trace_file:str=None, trace_folder:str=Non
     
     if not verbose:
         with open(simulator['report']['output'], 'r') as csvfile:
-            reader = csv.DictReader(csvfile)
-            results = { line['Policy'] : (f"{float(line['Hit Rate']):.2f}%", float(line['Average Penalty']), float(line['Average Penalty not including delayed hits'])) for line in reader }
+            results = pd.read_csv(csvfile)
         
         if not save:
             os.remove(simulator['report']['output'])
             
-        return results if len(results) != 1 else list(results.values())[0]
+        return results
 
 
 def download_single_trace(trace, path=None):
