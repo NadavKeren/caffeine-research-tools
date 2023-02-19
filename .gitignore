@@ -16,5 +16,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Jupyter Notebooks
+*.ipynb
+
 # Vim temp files
 *.swp
