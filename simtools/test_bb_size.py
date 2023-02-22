@@ -18,8 +18,8 @@ resources = local_conf['resources'] if local_conf['resources'] != '' else caffei
 TRACES_DIR = f'{resources}'
 
 
-SIZES = [2 ** 10, 2 ** 14, 2 ** 18]
-LFU_PERCENTAGES = arange(0.1, 1.0, 0.1)
+SIZES = [2 ** 10, 2 ** 12, 2 ** 14, 2 ** 16]
+BB_PERCENTAGES = arange(0.1, 0.8, 0.1)
 
 
 class Colors():
@@ -76,8 +76,7 @@ def main():
     print(f'{Colors.bold}{Colors.cyan}Checking files:\n{pprint.pformat(files_tested, indent=4)}{Colors.reset}')
     
     
-    basic_settings = {'latency-estimation.strategy' : 'latest',
-                      'ca-hill-climber-window.strategy' : ['simple']}
+    basic_settings = {'latency-estimation.strategy' : 'latest'}
 
     results = pd.DataFrame()
     
@@ -89,25 +88,25 @@ def main():
         print(f'Trace: {trace_name}, Window sizes: {window_sizes}')
         
         for cache_size in SIZES:
-            for lfu_percentage in LFU_PERCENTAGES:
-                print(f'Running with {cache_size} and LFU: {lfu_percentage * 100}\%')
-                single_run_result = simulatools.single_run('window_ca', trace_file=file, trace_folder='latency', 
+            for bb_percentage in BB_PERCENTAGES:
+                print(f'Running with {cache_size} and BB: {bb_percentage * 100}\%')
+                single_run_result = simulatools.single_run('window_ca_burst_block', trace_file=file, trace_folder='latency', 
                                                            trace_format='LATENCY', size=cache_size, 
                                                            additional_settings={**basic_settings, 
-                                                                                'ca-window.percent-main' : [lfu_percentage]},
-                                                           name=f'{trace_name}-{window_sizes}-{cache_size}-WCA',
+                                                                                'ca-bb-window.percent-burst-block' : bb_percentage},
+                                                           name=f'{trace_name}-{window_sizes}-{cache_size}-WBBCA',
                                                            save = False)
                 
                 if (single_run_result is False):
                     print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: exiting{Colors.reset}')
                 else:
                     latency = window_sizes.split('_')[1]
-                    single_run_result['LFU Percentage'] = lfu_percentage
+                    single_run_result['BB Percentage'] = bb_percentage
                     single_run_result['Cache Size'] = cache_size
                     single_run_result['Latency'] = latency
                     single_run_result['Trace'] = trace_name
                     results = pd.concat([results, single_run_result], ignore_index=True)
-                    results.to_pickle(f'./results/{trace_name}-{window_sizes}-{cache_size}-LFU-LRU-res.pickle')
+                    results.to_pickle(f'./results/{trace_name}-{window_sizes}-{cache_size}-BB-sizes.pickle')
 
 
 if __name__ == "__main__":
