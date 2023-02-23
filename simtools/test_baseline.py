@@ -19,7 +19,6 @@ TRACES_DIR = f'{resources}'
 
 
 SIZES = [2 ** 10, 2 ** 12, 2 ** 14, 2 ** 16]
-BB_PERCENTAGES = arange(0.1, 0.8, 0.1)
 
 
 class Colors():

@@ -77,8 +77,6 @@ def main():
     
     
     basic_settings = {'latency-estimation.strategy' : 'latest'}
-
-    results = pd.DataFrame()
     
     makedirs('./results', exist_ok=True)
     
@@ -89,7 +87,7 @@ def main():
         
         for cache_size in SIZES:
             for bb_percentage in BB_PERCENTAGES:
-                print(f'Running with {cache_size} and BB: {bb_percentage * 100}\%')
+                print(f'Running with {cache_size} and BB: {int(bb_percentage * 100)}%')
                 single_run_result = simulatools.single_run('window_ca_burst_block', trace_file=file, trace_folder='latency', 
                                                            trace_format='LATENCY', size=cache_size, 
                                                            additional_settings={**basic_settings, 
@@ -101,12 +99,11 @@ def main():
                     print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: exiting{Colors.reset}')
                 else:
                     latency = window_sizes.split('_')[1]
-                    single_run_result['BB Percentage'] = bb_percentage
+                    single_run_result['BB Percentage'] = int(bb_percentage * 100)
                     single_run_result['Cache Size'] = cache_size
                     single_run_result['Latency'] = latency
                     single_run_result['Trace'] = trace_name
-                    results = pd.concat([results, single_run_result], ignore_index=True)
-                    results.to_pickle(f'./results/{trace_name}-{window_sizes}-{cache_size}-BB-sizes.pickle')
+                    single_run_result.to_pickle(f'./results/{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-BB-sizes.pickle')
 
 
 if __name__ == "__main__":
