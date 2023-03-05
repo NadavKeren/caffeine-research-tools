@@ -1,6 +1,7 @@
 import argparse
 import simulatools
 import pprint
+import pickle
 import re
 from itertools import chain
 from os import path, listdir, makedirs
@@ -18,7 +19,10 @@ resources = local_conf['resources'] if local_conf['resources'] != '' else caffei
 TRACES_DIR = f'{resources}'
 
 
-SIZES = [2 ** 10, 2 ** 12, 2 ** 14, 2 ** 16]
+SIZES = {'trace010' : [2 ** 7, 2 ** 8, 2 ** 9, 2 ** 10], 'trace012' : [2 ** 8, 2 ** 9, 2 ** 10, 2 ** 11],
+         'trace024' : [2 ** 8, 2 ** 9, 2 ** 10, 2 ** 11], 'trace029' : [2 ** 6, 2 ** 7, 2 ** 8, 2 ** 9],
+         'trace031' : [2 ** 10, 2 ** 12, 2 ** 14, 2 ** 16], 'trace034' : [2 ** 10, 2 ** 12, 2 ** 14, 2 ** 16],
+         'trace045' : [2 ** 9, 2 ** 10, 2 ** 11, 2 ** 12]}
 BB_PERCENTAGES = arange(0.1, 0.8, 0.1)
 
 
@@ -60,6 +64,8 @@ def main():
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--trace', help='The trace name to test', type=str,  required=True)
+    parser.add_argument('--optimals', help='The path to a pickle file containing the optimal results for each trace for reference to the correct LFU-LRU ratio to use', 
+                        type=str, required=True)
     parser.add_argument('--time', help='The time of the second dist to check, Default: ALL', 
                         type=int, required=False)
     
@@ -80,25 +86,40 @@ def main():
     
     makedirs('./results', exist_ok=True)
     
+    with open(f'{args.optimals}', 'rb') as optimals_file:
+        optimals = pickle.load(optimals_file)
+    
     for file in files_tested:
         trace_name = get_trace_name(file)
         window_sizes = get_window_size(file)
+        latency = int(window_sizes.split('_')[1])
         print(f'Trace: {trace_name}, Window sizes: {window_sizes}')
         
-        for cache_size in SIZES:
+        for cache_size in SIZES[trace_name]:
+            optimal_LFU_percentage = optimals.get((trace_name, latency, cache_size / 2))
+            
+            if optimal_LFU_percentage is None:
+                optimal_LFU_percentage = optimals.get((trace_name, latency, cache_size))
+            
+            optimal_LFU_percentage = optimal_LFU_percentage[0] / 100
             for bb_percentage in BB_PERCENTAGES:
-                print(f'Running with {cache_size} and BB: {int(bb_percentage * 100)}%')
+                print(f'Running with {cache_size} BB: {int(bb_percentage * 100)}% and LFU: {int(optimal_LFU_percentage * 100)}%')
+                if (optimal_LFU_percentage < 0):
+                    print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: Bad optimal, exiting{Colors.reset}')
+                    exit(1)
+                
                 single_run_result = simulatools.single_run('window_ca_burst_block', trace_file=file, trace_folder='latency', 
                                                            trace_format='LATENCY', size=cache_size, 
                                                            additional_settings={**basic_settings, 
+                                                                                'ca-bb-window.percent-main' : [optimal_LFU_percentage],
                                                                                 'ca-bb-window.percent-burst-block' : bb_percentage},
                                                            name=f'{trace_name}-{window_sizes}-{cache_size}-WBBCA',
                                                            save = False)
                 
                 if (single_run_result is False):
                     print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: exiting{Colors.reset}')
-                else:
-                    latency = window_sizes.split('_')[1]
+                    exit(1)
+                else:                    
                     single_run_result['BB Percentage'] = int(bb_percentage * 100)
                     single_run_result['Cache Size'] = cache_size
                     single_run_result['Latency'] = latency

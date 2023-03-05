@@ -18,7 +18,10 @@ resources = local_conf['resources'] if local_conf['resources'] != '' else caffei
 TRACES_DIR = f'{resources}'
 
 
-SIZES = [2 ** 10, 2 ** 12, 2 ** 14, 2 ** 16]
+SIZES = {'trace010' : [2 ** 7, 2 ** 8, 2 ** 9, 2 ** 10], 'trace012' : [2 ** 8, 2 ** 9, 2 ** 10, 2 ** 11],
+         'trace024' : [2 ** 8, 2 ** 9, 2 ** 10, 2 ** 11], 'trace029' : [2 ** 6, 2 ** 7, 2 ** 8, 2 ** 9],
+         'trace031' : [2 ** 10, 2 ** 12, 2 ** 14, 2 ** 16], 'trace034' : [2 ** 10, 2 ** 12, 2 ** 14, 2 ** 16],
+         'trace045' : [2 ** 9, 2 ** 10, 2 ** 11, 2 ** 12]}
 LFU_PERCENTAGES = arange(0.1, 1.0, 0.1)
 
 
@@ -79,14 +82,14 @@ def main():
     basic_settings = {'latency-estimation.strategy' : 'latest',
                       'ca-hill-climber-window.strategy' : ['simple']}
     
-    makedirs('./results', exist_ok=True)
+
     
     for file in files_tested:
         trace_name = get_trace_name(file)
         window_sizes = get_window_size(file)
         print(f'Trace: {trace_name}, Window sizes: {window_sizes}')
         
-        for cache_size in SIZES:
+        for cache_size in SIZES[trace_name]:
             for lfu_percentage in LFU_PERCENTAGES:
                 print(f'Running with {cache_size} and LFU: {int(lfu_percentage * 100)}%')
                 single_run_result = simulatools.single_run('window_ca', trace_file=file, trace_folder='latency', 
