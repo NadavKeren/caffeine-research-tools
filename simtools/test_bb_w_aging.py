@@ -68,6 +68,7 @@ def main():
                         type=str, required=True)
     parser.add_argument('--time', help='The time of the second dist to check, Default: ALL', 
                         type=int, required=False)
+    parser.add_argument('--random-aging', help='Toggle for the naive random aging estimation for baseline of the aging mechanism', action='store_true')
     
     args = parser.parse_args()
     
@@ -83,10 +84,14 @@ def main():
     print(f'{Colors.bold}{Colors.yellow}Running from: {caffeine_root} for resources: {TRACES_DIR}\n########################################################\n {Colors.reset}')
     print(f'{Colors.bold}{Colors.cyan}Checking files:\n{pprint.pformat(files_tested, indent=4)}{Colors.reset}')
     
-    
-    basic_settings = {'latency-estimation.strategy' : 'latest',
-                      'ca-bb-window.burst-strategy' : 'moving-average',
-                      'ca-bb-window.number-of-partitions' : 4}
+    if (args.random_aging is not True):
+        basic_settings = {'latency-estimation.strategy' : 'latest',
+                          'ca-bb-window.burst-strategy' : 'moving-average',
+                          'ca-bb-window.number-of-partitions' : 4}
+    else:
+        basic_settings = {'latency-estimation.strategy' : 'latest',
+                          'ca-bb-window.burst-strategy' : 'random'}
+        ALPHAS = [200]
     
     makedirs('./results', exist_ok=True)
     
@@ -127,8 +132,14 @@ def main():
                         single_run_result['Cache Size'] = cache_size
                         single_run_result['Latency'] = latency
                         single_run_result['Trace'] = trace_name
-                        single_run_result['Smoothing Factor'] = alpha
-                        pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-{alpha:.2f}-BB-sizes.pickle'
+                        
+                        if args.random_aging is not True:
+                            single_run_result['Smoothing Factor'] = alpha
+                            single_run_result['Aging Mechanism'] = 'ES'
+                            pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-{alpha:.2f}-BB-sizes.pickle'
+                        else:
+                            single_run_result['Aging Mechanism'] = 'random'
+                            pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-random-BB-sizes.pickle'
                         single_run_result.to_pickle(f'./results/{pickle_filename}')
 
 
