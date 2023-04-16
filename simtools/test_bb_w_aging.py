@@ -24,9 +24,10 @@ SIZES = {'trace010' : 2 ** 10, 'trace024' : 2 ** 10, 'trace031' : 2 ** 16,
          'trace012' : 1024}
 BB_PERCENTAGES = arange(0.1, 0.8, 0.2)
 DOWN_ALPHAS = [0.025, 0.05, 0.1]
-AGING_SIZES = [10, 50, 100, 500, 1000]
-AGING_ALPHAS = [0.0025, 0.005, 0.025, 0.05]
-
+# AGING_SIZES = [10, 50, 100, 500, 1000]
+# AGING_ALPHAS = [0.0025, 0.005, 0.025, 0.05]
+AGING_SIZES = [1000, 10000, 50000, 100000]
+AGING_ALPHAS = [0.5, 1]
 
 class Colors():
     reset='\033[0m'
