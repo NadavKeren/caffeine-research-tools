@@ -63,6 +63,29 @@ def get_window_size(fname: str):
     return suffix[0].lstrip('_')
 
 
+def run_baseline(fname: str, trace_name: str, window_sizes: str, cache_size: int, optimal_LFU_percentage: float):
+    pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-Baseline.pickle'
+    
+    if (not path.isfile(f'./results/{pickle_filename}')): # * Skipping baseline if exists
+        print(f'{Colors.cyan}Running baseline for {trace_name} - {window_sizes} with size {cache_size}{Colors.reset}\n')
+        single_run_result = simulatools.single_run('window_ca', trace_file=fname, trace_folder='latency', 
+                                                   trace_format='LATENCY', size=cache_size, 
+                                                   additional_settings={'ca-window.percent-main' : [optimal_LFU_percentage]},
+                                                   name=f'{trace_name}-{window_sizes}-{cache_size}-CA-Baseline',
+                                                   save = False)
+        
+        if (single_run_result is False):
+            print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: exiting{Colors.reset}')
+            exit(1)
+        else:       
+            single_run_result['BB Percentage'] = 0
+            single_run_result['Cache Size'] = cache_size
+            single_run_result['Latency'] = int(window_sizes.split('_')[1])
+            single_run_result['Trace'] = trace_name
+            
+            single_run_result.to_pickle(f'./results/{pickle_filename}')   
+            
+
 def main():
     parser = argparse.ArgumentParser()
     
@@ -111,6 +134,8 @@ def main():
         if cache_size is not None:
             optimal_LFU_percentage = optimals.get((trace_name, latency, cache_size))[0] / 100
             
+            run_baseline(file, trace_name, window_sizes, cache_size, optimal_LFU_percentage)
+            
             for bb_percentage, down_alpha, aging_window_size, aging_alpha in product(BB_PERCENTAGES, DOWN_ALPHAS, AGING_SIZES, AGING_ALPHAS):
                 pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-{down_alpha:.2f}-{aging_window_size}-{aging_alpha:.3f}-BB-sizes.pickle'
                 
@@ -130,10 +155,10 @@ def main():
                     print(f'{pprint.pformat(current_run_settings)}\n')
                     
                     single_run_result = simulatools.single_run('window_ca_burst_block', trace_file=file, trace_folder='latency', 
-                                                            trace_format='LATENCY', size=cache_size, 
-                                                            additional_settings=settings,
-                                                            name=f'{trace_name}-{window_sizes}-{cache_size}-{down_alpha:.2f}-{aging_window_size}-{aging_alpha:.3f}-WBBCA',
-                                                            save = False)
+                                                               trace_format='LATENCY', size=cache_size, 
+                                                               additional_settings=settings,
+                                                               name=f'{trace_name}-{window_sizes}-{cache_size}-{down_alpha:.2f}-{aging_window_size}-{aging_alpha:.3f}-WBBCA',
+                                                               save = False)
                     
                     if (single_run_result is False):
                         print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: exiting{Colors.reset}')
