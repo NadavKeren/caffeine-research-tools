@@ -26,8 +26,8 @@ BB_PERCENTAGES = arange(0.1, 0.8, 0.2)
 DOWN_ALPHAS = [0.025, 0.05, 0.1]
 # AGING_SIZES = [10, 50, 100, 500, 1000]
 # AGING_ALPHAS = [0.0025, 0.005, 0.025, 0.05]
-AGING_SIZES = [1000, 10000, 50000, 100000]
-AGING_ALPHAS = [0.5, 1]
+AGING_SIZES = [(size + 1) * 100 for size in range(10)]
+AGING_ALPHAS = [alpha for alpha in arange(0.001, 0.011, 0.001)]
 
 class Colors():
     reset='\033[0m'
@@ -113,8 +113,7 @@ def main():
     if (args.random_aging is not True):
         basic_settings = {'latency-estimation.strategy' : 'latest',
                           'ca-bb-window.burst-strategy' : 'moving-average',
-                          'ca-bb-window.number-of-partitions' : 4,
-                          'ca-bb-window.smooth-up-factor' : 1}
+                          'ca-bb-window.number-of-partitions' : 4}
     else:
         basic_settings = {'latency-estimation.strategy' : 'latest',
                           'ca-bb-window.burst-strategy' : 'random'}
@@ -136,8 +135,8 @@ def main():
             
             run_baseline(file, trace_name, window_sizes, cache_size, optimal_LFU_percentage)
             
-            for bb_percentage, down_alpha, aging_window_size, aging_alpha in product(BB_PERCENTAGES, DOWN_ALPHAS, AGING_SIZES, AGING_ALPHAS):
-                pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-{down_alpha:.2f}-{aging_window_size}-{aging_alpha:.3f}-BB-sizes.pickle'
+            for bb_percentage, aging_window_size, aging_alpha in product(BB_PERCENTAGES ,AGING_SIZES, AGING_ALPHAS):
+                pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-{aging_window_size}-{aging_alpha:.3f}-BB-sizes.pickle'
                 
                 if (not path.isfile(f'./results/{pickle_filename}')): # * Skipping tests with existing results        
                     if (optimal_LFU_percentage < 0):
@@ -145,7 +144,6 @@ def main():
                         exit(1)
                     
                     current_run_settings = {'ca-bb-window.percent-main' : [optimal_LFU_percentage],
-                                            'ca-bb-window.smooth-down-factor' : down_alpha,
                                             'ca-bb-window.percent-burst-block' : bb_percentage,
                                             'ca-bb-window.aging-window-size': aging_window_size,
                                             'ca-bb-window.age-smoothing' : aging_alpha}
@@ -157,7 +155,7 @@ def main():
                     single_run_result = simulatools.single_run('window_ca_burst_block', trace_file=file, trace_folder='latency', 
                                                                trace_format='LATENCY', size=cache_size, 
                                                                additional_settings=settings,
-                                                               name=f'{trace_name}-{window_sizes}-{cache_size}-{down_alpha:.2f}-{aging_window_size}-{aging_alpha:.3f}-WBBCA',
+                                                               name=f'{trace_name}-{window_sizes}-{cache_size}-{aging_window_size}-{aging_alpha:.3f}-WBBCA',
                                                                save = False)
                     
                     if (single_run_result is False):
@@ -170,11 +168,10 @@ def main():
                         single_run_result['Trace'] = trace_name
                         
                         if args.random_aging is not True:
-                            single_run_result['Smooth Down Factor'] = down_alpha
                             single_run_result['Aging Window Size'] = aging_window_size
                             single_run_result['Aging Alpha'] = aging_alpha
                             single_run_result['Aging Mechanism'] = 'ES'
-                            pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-{down_alpha:.2f}-{aging_window_size}-{aging_alpha:.3f}-BB-sizes.pickle'
+                            pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-{aging_window_size}-{aging_alpha:.3f}-BB-sizes.pickle'
                         else:
                             single_run_result['Aging Mechanism'] = 'random'
                             pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-random-BB-sizes.pickle'
