@@ -26,8 +26,13 @@ BB_PERCENTAGES = arange(0.1, 0.8, 0.2)
 DOWN_ALPHAS = [0.025, 0.05, 0.1]
 # AGING_SIZES = [10, 50, 100, 500, 1000]
 # AGING_ALPHAS = [0.0025, 0.005, 0.025, 0.05]
-AGING_SIZES = [(size + 1) * 100 for size in range(10)]
-AGING_ALPHAS = [alpha for alpha in arange(0.001, 0.011, 0.001)]
+# AGING_SIZES = [(size + 1) * 100 for size in range(10)]
+# AGING_ALPHAS = [alpha for alpha in arange(0.001, 0.011, 0.001)]
+SMALL_SIZES = [(size + 1) * 10 for size in range(10)]
+LARGE_SIZES = [(size + 1) * 100 for size in range(10)]
+NO_AGING_SIZE = 2147483647
+AGING_SIZES = list(chain.from_iterable([SMALL_SIZES, LARGE_SIZES]))
+AGING_ALPHAS = [alpha for alpha in arange(0.001, 0.011, 0.0025)]
 
 class Colors():
     reset='\033[0m'
@@ -84,7 +89,52 @@ def run_baseline(fname: str, trace_name: str, window_sizes: str, cache_size: int
             single_run_result['Trace'] = trace_name
             
             single_run_result.to_pickle(f'./results/{pickle_filename}')   
+
+
+def run_single_conf(file, basic_settings, trace_name, window_sizes, latency, optimal_LFU_percentage, 
+                    cache_size, bb_percentage, aging_window_size, aging_alpha):
+    if aging_window_size < NO_AGING_SIZE:
+        pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-{aging_window_size}-{aging_alpha:.3f}-BB-sizes.pickle'
+    else:
+        pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-no-aging-BB-sizes.pickle'
+    if (not path.isfile(f'./results/{pickle_filename}')): # * Skipping tests with existing results        
+        if (optimal_LFU_percentage < 0):
+            print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: Bad optimal, exiting{Colors.reset}')
+            exit(1)
+        
+        current_run_settings = {'ca-bb-window.percent-main' : [optimal_LFU_percentage],
+                                'ca-bb-window.percent-burst-block' : bb_percentage,
+                                'ca-bb-window.aging-window-size': aging_window_size,
+                                'ca-bb-window.age-smoothing' : aging_alpha}
+        settings = {**basic_settings, 
+                    **current_run_settings}
+        
+        print(f'{pprint.pformat(current_run_settings)}\n')
+        
+        single_run_result = simulatools.single_run('window_ca_burst_block', trace_file=file, trace_folder='latency', 
+                                                    trace_format='LATENCY', size=cache_size, 
+                                                    additional_settings=settings,
+                                                    name=f'{trace_name}-{window_sizes}-{cache_size}-{aging_window_size}-{aging_alpha:.3f}-WBBCA',
+                                                    save = False)
+        
+        if (single_run_result is False):
+            print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: exiting{Colors.reset}')
+            exit(1)
+        else:                    
+            single_run_result['BB Percentage'] = int(bb_percentage * 100)
+            single_run_result['Cache Size'] = cache_size
+            single_run_result['Latency'] = latency
+            single_run_result['Trace'] = trace_name
             
+            single_run_result['Aging Window Size'] = aging_window_size
+            if (aging_window_size < NO_AGING_SIZE):
+                single_run_result['Aging Alpha'] = aging_alpha
+                single_run_result['Aging Mechanism'] = 'ES'
+            else:
+                single_run_result['Aging Alpha'] = 0
+                single_run_result['Aging Mechanism'] = 'none'
+            
+            single_run_result.to_pickle(f'./results/{pickle_filename}')
 
 def main():
     parser = argparse.ArgumentParser()
@@ -134,48 +184,16 @@ def main():
             optimal_LFU_percentage = optimals.get((trace_name, latency, cache_size))[0] / 100
             
             run_baseline(file, trace_name, window_sizes, cache_size, optimal_LFU_percentage)
-            
-            for bb_percentage, aging_window_size, aging_alpha in product(BB_PERCENTAGES ,AGING_SIZES, AGING_ALPHAS):
-                pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-{aging_window_size}-{aging_alpha:.3f}-BB-sizes.pickle'
+            for bb_percentage in BB_PERCENTAGES:
+                for aging_window_size, aging_alpha in product(AGING_SIZES, AGING_ALPHAS):
+                    
+                        run_single_conf(file, basic_settings, trace_name, window_sizes, latency, 
+                                        optimal_LFU_percentage, cache_size, bb_percentage, 
+                                        aging_window_size, aging_alpha)
                 
-                if (not path.isfile(f'./results/{pickle_filename}')): # * Skipping tests with existing results        
-                    if (optimal_LFU_percentage < 0):
-                        print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: Bad optimal, exiting{Colors.reset}')
-                        exit(1)
-                    
-                    current_run_settings = {'ca-bb-window.percent-main' : [optimal_LFU_percentage],
-                                            'ca-bb-window.percent-burst-block' : bb_percentage,
-                                            'ca-bb-window.aging-window-size': aging_window_size,
-                                            'ca-bb-window.age-smoothing' : aging_alpha}
-                    settings = {**basic_settings, 
-                                **current_run_settings}
-                    
-                    print(f'{pprint.pformat(current_run_settings)}\n')
-                    
-                    single_run_result = simulatools.single_run('window_ca_burst_block', trace_file=file, trace_folder='latency', 
-                                                               trace_format='LATENCY', size=cache_size, 
-                                                               additional_settings=settings,
-                                                               name=f'{trace_name}-{window_sizes}-{cache_size}-{aging_window_size}-{aging_alpha:.3f}-WBBCA',
-                                                               save = False)
-                    
-                    if (single_run_result is False):
-                        print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: exiting{Colors.reset}')
-                        exit(1)
-                    else:                    
-                        single_run_result['BB Percentage'] = int(bb_percentage * 100)
-                        single_run_result['Cache Size'] = cache_size
-                        single_run_result['Latency'] = latency
-                        single_run_result['Trace'] = trace_name
-                        
-                        if args.random_aging is not True:
-                            single_run_result['Aging Window Size'] = aging_window_size
-                            single_run_result['Aging Alpha'] = aging_alpha
-                            single_run_result['Aging Mechanism'] = 'ES'
-                            pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-{aging_window_size}-{aging_alpha:.3f}-BB-sizes.pickle'
-                        else:
-                            single_run_result['Aging Mechanism'] = 'random'
-                            pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{int(bb_percentage * 100)}-random-BB-sizes.pickle'
-                        single_run_result.to_pickle(f'./results/{pickle_filename}')
+                run_single_conf(file, basic_settings, trace_name, window_sizes, latency, 
+                                optimal_LFU_percentage, cache_size, bb_percentage, NO_AGING_SIZE, 0)
+                
     print(f'{Colors.bold}{Colors.green}Done\n#####################\n\n{Colors.reset}')
 
 if __name__ == "__main__":
