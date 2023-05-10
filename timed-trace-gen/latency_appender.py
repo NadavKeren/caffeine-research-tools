@@ -125,25 +125,33 @@ def main():
     OUTPUT_DIR = args.output_dir if args.output_dir else './out_latencies'
     
 
-    times = [args.time] if args.time is not None else [100, 200, 400, 800]
+    # times = [args.time] if args.time is not None else [100, 200, 400, 800]
+    generators = [([SingleValueDist(100), SingleValueDist(1000)], [0.5, 0.5], 'hp1-100-1000'), ([SingleValueDist(10)], [1], 'hp1-10')]
     seeds = {'trace018' : 2867, 'trace005' : 22874, 'trace000' : 36661, 'trace045' : 4150,
              'trace036' : 45755, 'trace012' : 32153, 'trace024' : 23516, 'trace031' : 38080,
              'trace049' : 57461, 'trace034' : 33022, 'trace044' : 7033, 'trace029' : 38573,
              'trace010' : 43215}
     input_files_paths = [f for f in listdir(INPUT_DIR) if 'Trace018' not in f and 'Trace005' not in f]
-    input_files_with_names = [(f, time, get_trace_name(f), f'IBMOS_{get_trace_name(f)}_50_{time}') 
-                              for f in input_files_paths 
-                              for time in times]
-        
+    # input_files_with_names = [(f, time, get_trace_name(f), f'IBMOS_{get_trace_name(f)}_50_{time}') 
+    #                           for f in input_files_paths 
+    #                           for time in times]
+    
     makedirs(OUTPUT_DIR, exist_ok=True)
     
     with Timer():
-        with tqdm.tqdm(total = len(input_files_with_names)) as progressbar:
-            for (file, time, trace_name, set_name) in input_files_with_names:
+        with tqdm.tqdm(total = len(input_files_paths) * (len(generators) + 1)) as progressbar:
+            for file in input_files_paths:
+                trace_name = get_trace_name(file)
                 seed = seeds[trace_name]
-                addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, [file], args.key_base, [SingleValueDist(50), SingleValueDist(time)], 
-                                       [0.5, 0.5], gen_timestamps=not args.contains_timestamps, verbose=args.verbose, 
-                                       compress=args.compress, set_name=set_name, seed=seed)
+                set_name = f'IBMOS-{trace_name}-'
+                for dists, probs, suffix in generators:
+                    addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, [file], args.key_base, dists, #[SingleValueDist(50), SingleValueDist(time)], 
+                                        probs, gen_timestamps=not args.contains_timestamps, verbose=args.verbose, 
+                                        compress=args.compress, set_name=set_name + suffix, seed=seed)
+                    progressbar.update(1)
+                addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, [file], args.key_base, [SingleValueDist(1000)], 
+                                        [1], hit_penalty=100, gen_timestamps=not args.contains_timestamps, verbose=args.verbose, 
+                                        compress=args.compress, set_name=set_name + 'hp100-1000', seed=seed)
                 progressbar.update(1)
 
  
