@@ -18,10 +18,10 @@ resources = local_conf['resources'] if local_conf['resources'] != '' else caffei
 TRACES_DIR = f'{resources}'
 
 
-SIZES = {'trace010' : [2 ** 7, 2 ** 8, 2 ** 9, 2 ** 10], 'trace012' : [2 ** 8, 2 ** 9, 2 ** 10, 2 ** 11],
-         'trace024' : [2 ** 8, 2 ** 9, 2 ** 10, 2 ** 11], 'trace029' : [2 ** 6, 2 ** 7, 2 ** 8, 2 ** 9],
-         'trace031' : [2 ** 10, 2 ** 12, 2 ** 14, 2 ** 16], 'trace034' : [2 ** 10, 2 ** 12, 2 ** 14, 2 ** 16],
-         'trace045' : [2 ** 9, 2 ** 10, 2 ** 11, 2 ** 12]}
+SIZES = {'trace010' : 2 ** 10, 'trace024' : 2 ** 10, 'trace031' : 2 ** 16,
+         'trace045' : 2 ** 12, 'trace034' : 2 ** 14, 'trace029' : 2 ** 9,
+         'trace012' : 1024}
+
 LFU_PERCENTAGES = arange(0.1, 1.0, 0.1)
 
 
@@ -51,14 +51,6 @@ def get_trace_name(fname: str):
     
     return name[0]
 
-def get_window_size(fname: str):
-    suffix = re.findall('_[0-9]*_[0-9]*', fname)
-    if not suffix:
-        suffix = re.findall('_[0-9]*', fname)
-    
-    return suffix[0].lstrip('_')
-
-
 def main():
     parser = argparse.ArgumentParser()
     
@@ -86,28 +78,26 @@ def main():
     
     for file in files_tested:
         trace_name = get_trace_name(file)
-        window_sizes = get_window_size(file)
-        print(f'Trace: {trace_name}, Window sizes: {window_sizes}')
+        print(f'{file}')
         
-        for cache_size in SIZES[trace_name]:
-            for lfu_percentage in LFU_PERCENTAGES:
-                print(f'Running with {cache_size} and LFU: {int(lfu_percentage * 100)}%')
-                single_run_result = simulatools.single_run('window_ca', trace_file=file, trace_folder='latency', 
-                                                           trace_format='LATENCY', size=cache_size, 
-                                                           additional_settings={**basic_settings, 
-                                                                                'ca-window.percent-main' : [lfu_percentage]},
-                                                           name=f'{trace_name}-{window_sizes}-{cache_size}-WCA',
-                                                           save = False)
-                
-                if (single_run_result is False):
-                    print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: exiting{Colors.reset}')
-                else:
-                    latency = window_sizes.split('_')[1]
-                    single_run_result['LFU Percentage'] = int(lfu_percentage * 100)
-                    single_run_result['Cache Size'] = cache_size
-                    single_run_result['Latency'] = latency
-                    single_run_result['Trace'] = trace_name
-                    single_run_result.to_pickle(f'./results/{trace_name}-{window_sizes}-{cache_size}-{int(lfu_percentage * 100)}-LFU-LRU-res.pickle')
+        cache_size = SIZES[trace_name]
+        for lfu_percentage in LFU_PERCENTAGES:
+            print(f'Running with {cache_size} and LFU: {int(lfu_percentage * 100)}%')
+            single_run_result = simulatools.single_run('window_ca', trace_file=file, trace_folder='latency', 
+                                                        trace_format='LATENCY', size=cache_size, 
+                                                        additional_settings={**basic_settings, 
+                                                                            'ca-window.percent-main' : [lfu_percentage]},
+                                                        name=f'{file}-{cache_size}-WCA',
+                                                        save = False)
+            
+            if (single_run_result is False):
+                print(f'{Colors.bold}{Colors.red}Error in {file}: exiting{Colors.reset}')
+            else:
+                single_run_result['LFU Percentage'] = int(lfu_percentage * 100)
+                single_run_result['Cache Size'] = cache_size
+                single_run_result['Trace'] = trace_name
+                single_run_result['File'] = file
+                single_run_result.to_pickle(f'./results/{file}-{cache_size}-{int(lfu_percentage * 100)}-LFU-LRU-res.pickle')
 
 
 if __name__ == "__main__":

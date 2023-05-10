@@ -51,32 +51,24 @@ def get_trace_name(fname: str):
     
     return name[0]
 
-def get_window_size(fname: str):
-    suffix = re.findall('_[0-9]*_[0-9]*', fname)
-    if not suffix:
-        suffix = re.findall('_[0-9]*', fname)
-    
-    return suffix[0].lstrip('_')
 
-
-def run_baseline(fname: str, trace_name: str, window_sizes: str, cache_size: int, optimal_LFU_percentage: float):
-    pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-Baseline-SYSTOR.pickle'
+def run_baseline(fname: str, trace_name: str, cache_size: int, optimal_LFU_percentage: float):
+    pickle_filename = f'{fname}-{cache_size}-Baseline-SYSTOR.pickle'
     
     if (not path.isfile(f'./results/{pickle_filename}')): # * Skipping baseline if exists
-        print(f'{Colors.cyan}Running baseline for {trace_name} - {window_sizes} with size {cache_size}{Colors.reset}\n')
+        print(f'{Colors.cyan}Running baseline for {fname} with size {cache_size}{Colors.reset}\n')
         single_run_result = simulatools.single_run('window_ca', trace_file=fname, trace_folder='latency', 
                                                    trace_format='LATENCY', size=cache_size, 
                                                    additional_settings={'ca-window.percent-main' : [optimal_LFU_percentage]},
-                                                   name=f'{trace_name}-{window_sizes}-{cache_size}-CA-Baseline',
+                                                   name=f'{fname}-{cache_size}-CA-Baseline',
                                                    save = False)
         
         if (single_run_result is False):
-            print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: exiting{Colors.reset}')
+            print(f'{Colors.bold}{Colors.red}Error in {fname}: exiting{Colors.reset}')
             exit(1)
         else:       
             single_run_result['BB Percentage'] = 0
             single_run_result['Cache Size'] = cache_size
-            single_run_result['Latency'] = int(window_sizes.split('_')[1])
             single_run_result['Trace'] = trace_name
             single_run_result['Aging Alpha'] = 0
             single_run_result['Aging Mechanism'] = 'none'
@@ -84,12 +76,12 @@ def run_baseline(fname: str, trace_name: str, window_sizes: str, cache_size: int
             single_run_result.to_pickle(f'./results/{pickle_filename}')   
 
 
-def run_single_conf(file, basic_settings, trace_name, window_sizes, latency, optimal_LFU_percentage, 
+def run_single_conf(file, basic_settings, trace_name, optimal_LFU_percentage, 
                     cache_size, bb_percentage):
-    pickle_filename = f'{trace_name}-{window_sizes}-{cache_size}-{bb_percentage}-SYSTOR.pickle'
+    pickle_filename = f'{fname}-{cache_size}-{bb_percentage}-SYSTOR.pickle'
     if (not path.isfile(f'./results/{pickle_filename}')): # * Skipping tests with existing results        
         if (optimal_LFU_percentage < 0):
-            print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: Bad optimal, exiting{Colors.reset}')
+            print(f'{Colors.bold}{Colors.red}Error in {fname}: Bad optimal, exiting{Colors.reset}')
             exit(1)
         
         aging_window_size, aging_alpha = CONFIGURATIONS.get(trace_name, (300, 0.001))
@@ -105,16 +97,15 @@ def run_single_conf(file, basic_settings, trace_name, window_sizes, latency, opt
         single_run_result = simulatools.single_run('window_ca_burst_block', trace_file=file, trace_folder='latency', 
                                                     trace_format='LATENCY', size=cache_size, 
                                                     additional_settings=settings,
-                                                    name=f'{trace_name}-{window_sizes}-{cache_size}-{aging_window_size}-{aging_alpha:.3f}-WBBCA',
+                                                    name=f'{fname}-{cache_size}-{aging_window_size}-{aging_alpha:.3f}-WBBCA',
                                                     save = False)
         
         if (single_run_result is False):
-            print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: exiting{Colors.reset}')
+            print(f'{Colors.bold}{Colors.red}Error in {fname}: exiting{Colors.reset}')
             exit(1)
         else:                    
             single_run_result['BB Percentage'] = int(bb_percentage * 100)
             single_run_result['Cache Size'] = cache_size
-            single_run_result['Latency'] = latency
             single_run_result['Trace'] = trace_name
             
             single_run_result['Aging Window Size'] = aging_window_size
@@ -161,17 +152,15 @@ def main():
     
     for file in files_tested:
         trace_name = get_trace_name(file)
-        window_sizes = get_window_size(file)
-        latency = int(window_sizes.split('_')[1])
-        print(f'Trace: {trace_name}, Window sizes: {window_sizes}')
+        print(f'{file}')
         cache_size = SIZES.get(trace_name)
         
         if cache_size is not None:
-            optimal_LFU_percentage = optimals.get((trace_name, latency, cache_size))[0] / 100
+            optimal_LFU_percentage = optimals.get((fname, cache_size))[0] / 100
             
-            run_baseline(file, trace_name, window_sizes, cache_size, optimal_LFU_percentage)
+            run_baseline(file, trace_name, cache_size, optimal_LFU_percentage)
             for bb_percentage in BB_PERCENTAGES:
-                run_single_conf(file, basic_settings, trace_name, window_sizes, latency, 
+                run_single_conf(file, basic_settings, trace_name, 
                                 optimal_LFU_percentage, cache_size, bb_percentage)
                 
     print(f'{Colors.bold}{Colors.green}Done\n#####################\n\n{Colors.reset}')
