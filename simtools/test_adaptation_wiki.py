@@ -40,7 +40,7 @@ class Colors():
 
 NUM_OF_QUANTA = [16, 32, 64]
 ADAPTION_MULTIPLIERS = [1, 5, 10, 15]
-CACHE_SIZE = 4096
+CACHE_SIZE = 1024
 TRACE_FORMAT = "WIKIPEDIA"
 TRACE_FOLDER = "wiki"
 
@@ -56,7 +56,7 @@ def main():
         for starting_LFU_quota in [1, quanta_num / 2, quanta_num - 1]:
             for adaption_multiplier in ADAPTION_MULTIPLIERS:
                 settings = {"ghost-hill-climber-tiny-lfu.num-of-quanta" : quanta_num,
-                            "ghost-hill-climber-tiny-lfu.initial-lfu-quota": starting_LFU_quota,
+                            "ghost-hill-climber-tiny-lfu.initial-lfu-quota": [starting_LFU_quota],
                             "ghost-hill-climber-tiny-lfu.adaption-multiplier": adaption_multiplier}
                 
                 print(f'{Colors.lightcyan}{Colors.bold}Running with: num of quanta: {quanta_num},' 
@@ -64,11 +64,11 @@ def main():
                 
                 single_run_result = simulatools.single_run('naive_shadow', trace_files=files, trace_folder=TRACE_FOLDER, 
                                                            trace_format=TRACE_FORMAT, size=CACHE_SIZE, additional_settings=settings, 
-                                                           save=False, 
+                                                           save=False, verbose=True,
                                                            name=f'wiki-{quanta_num}-{starting_LFU_quota}-{adaption_multiplier}-naive-shadow')
                 
                 if (single_run_result is False):
-                    print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: exiting{Colors.reset}')
+                    print(f'{Colors.bold}{Colors.red}Error in {quanta_num}-{starting_LFU_quota}-{adaption_multiplier}: exiting{Colors.reset}')
                     exit(1)
                 else:
                     print(f'Results: {single_run_result["Hit Rate"]}')
