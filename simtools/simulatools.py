@@ -16,6 +16,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import pickle
 
+from typing import Union, List
+
 
 with open(os.path.join(os.path.dirname(__file__), 'conf.json')) as conf_file:
     local_conf = json.load(conf_file)
@@ -30,14 +32,14 @@ class Admission(Enum):
     TINY_LFU = 'TinyLfu'
 
 
-def single_run(policy, trace:str=None, trace_file:str=None, trace_folder:str=None, 
+def single_run(policy, trace:str=None, trace_files:Union[str, List[str]]=None, trace_folder:str=None, 
                trace_format:str=None, size:int=4, additional_settings:dict={}, name:str=None, 
                save:bool=True, reuse:bool=False, verbose:bool=False, readonly:bool=False, 
                seed:int=1033096058):
-    if (trace is None and (trace_file is None or trace_folder is None or trace_format is None)):
+    if (trace is None and (trace_files is None or trace_folder is None or trace_format is None)):
         raise ValueError('Either trace or ALL trace_file, trace_folder and trace_format must be provided')
     
-    name = name if name else f'{trace_file}-{size}-{policy}'
+    name = name if name else f'{trace_files}-{size}-{policy}'
     policy = Policy[policy]
     
     if trace is not None:
@@ -66,14 +68,18 @@ def single_run(policy, trace:str=None, trace_file:str=None, trace_folder:str=Non
     simulator = conf['caffeine']['simulator']
     
     if (trace is not None):
-        if (trace_file is not None or trace_format is not None):
+        if (trace_files is not None or trace_format is not None):
             print('Warning: Due to multiple definitions of trace origin, using only the default trace values')
             
-        trace_file = trace.value['file']
+        trace_files = trace.value['file']
         trace_folder = trace.value['format']
         trace_format = trace.value['format']
     
-    simulator.put('files.paths', [ resources_path + os.sep + trace_folder + os.sep + trace_file ])
+    if (type(trace_files) is list):
+        paths = [resources_path + os.sep + trace_folder + os.sep + path for path in trace_files]
+        simulator.put('files.paths', paths)
+    else:
+        simulator.put('files.paths', [ resources_path + os.sep + trace_folder + os.sep + trace_files ])
     
     simulator.put('files.format', trace_format)
     simulator.put('maximum-size', size)

@@ -6,6 +6,7 @@ class Policy(Enum):
     lfu =   'linked.Lfu'
     wtlfu = 'sketch.WindowTinyLfu'
     hc =    'sketch.HillClimberWindowTinyLfu'
+    naive_shadow = 'sketch.GhostClimberTinyLFU'
     window_ca = 'sketch.WindowCA'
     window_ca_burst_block = 'sketch.WindowCABurstBlock'
     window_ca_burst_cal = 'sketch.WindowCABurstCal'
