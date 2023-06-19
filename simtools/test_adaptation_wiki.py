@@ -64,7 +64,7 @@ def main():
                 
                 single_run_result = simulatools.single_run('naive_shadow', trace_files=files, trace_folder=TRACE_FOLDER, 
                                                            trace_format=TRACE_FORMAT, size=CACHE_SIZE, additional_settings=settings, 
-                                                           save=False, verbose=True,
+                                                           save=False, verbose=False,
                                                            name=f'wiki-{quanta_num}-{starting_LFU_quota}-{adaption_multiplier}-naive-shadow')
                 
                 if (single_run_result is False):
