@@ -48,6 +48,7 @@ def main():
     makedirs('./results', exist_ok=True)
     
     files = [f for f in listdir(f'{TRACES_DIR}/wiki')]
+    files = sorted(files)
     
     print(f'{Colors.bold}{Colors.green}Testing the files:\n{Colors.reset}{pprint.pformat(files)}')
     
