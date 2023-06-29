@@ -22,7 +22,7 @@ from typing import Union, List
 with open(os.path.join(os.path.dirname(__file__), 'conf.json')) as conf_file:
     local_conf = json.load(conf_file)
 caffeine_root = local_conf['caffeine_root']
-resources_path = local_conf['resources'] if local_conf['resources'] else caffeine_root + 'simulator{0}src{0}main{0}resources{0}com{0}github{0}benmanes{0}caffeine{0}cache{0}simulator{0}parser{0}'.format(os.sep)
+resources_path = local_conf['resources'] if local_conf['resources'] else caffeine_root + 'simulator{0}src{0}main{0}resources{0}com{0}github{0}benmanes{0}caffeine{0}cache{0}simulator{0}parser'.format(os.sep)
 output_path = local_conf['output'] if local_conf['output'] else os.getcwd() + os.sep
 output_csvs_path = output_path + 'csvs' + os.sep
 

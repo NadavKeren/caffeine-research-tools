@@ -4,9 +4,15 @@ Reset_all='\033[0m'
 BYellow='\033[1;33m'
 
 i=0
+
 for trace in "${traces[@]}";
 do
+    x=$i
+    while [ ${#x} -ne 4 ]; 
+    do    
+        x="0"$x; 
+    done
     echo -e "${BYellow}Downloading file ${i}: ${trace}${Reset_all}"
-    wget -O "wiki.${i}.gz" ${trace}
+    wget -O "wiki.${x}.gz" ${trace}
     i=$((i+1))
 done;

@@ -108,7 +108,7 @@ def main():
                     print(f'{Colors.bold}{Colors.red}Error in {trace_name}-{window_sizes}: Bad optimal, exiting{Colors.reset}')
                     exit(1)
                 
-                single_run_result = simulatools.single_run('window_ca_burst_block', trace_file=file, trace_folder='latency', 
+                single_run_result = simulatools.single_run('window_ca_burst_block', trace_files=file, trace_folder='latency', 
                                                            trace_format='LATENCY', size=cache_size, 
                                                            additional_settings={**basic_settings, 
                                                                                 'ca-bb-window.percent-main' : [optimal_LFU_percentage],
