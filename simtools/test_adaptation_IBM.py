@@ -173,10 +173,10 @@ def main():
         cache_size = SIZES.get(trace_name)
         
         if cache_size is not None:
-            # run_adaptive_CA(file, trace_name, times, cache_size)
-            # run_adaptive_CA_BB(file, trace_name, times, cache_size)
+            run_adaptive_CA(file, trace_name, times, cache_size)
+            run_adaptive_CA_BB(file, trace_name, times, cache_size)
             run_static_CA_BB(file, trace_name, times, cache_size)
-            # run_window_CA(file, trace_name, times, cache_size)
+            run_window_CA(file, trace_name, times, cache_size)
                 
     print(f'{Colors.bold}{Colors.green}Done\n#####################\n\n{Colors.reset}')
 

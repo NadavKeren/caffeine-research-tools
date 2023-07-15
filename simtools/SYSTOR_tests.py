@@ -57,7 +57,7 @@ def run_baseline(fname: str, trace_name: str, cache_size: int, optimal_LFU_perce
     
     if (not path.isfile(f'./results/{pickle_filename}')): # * Skipping baseline if exists
         print(f'{Colors.cyan}Running baseline for {fname} with size {cache_size}{Colors.reset}\n')
-        single_run_result = simulatools.single_run('window_ca', trace_file=fname, trace_folder='latency', 
+        single_run_result = simulatools.single_run('window_ca', trace_files=[fname], trace_folder='latency', 
                                                    trace_format='LATENCY', size=cache_size, 
                                                    additional_settings={'ca-window.percent-main' : [optimal_LFU_percentage]},
                                                    name=f'{fname}-{cache_size}-CA-Baseline',
@@ -94,7 +94,7 @@ def run_single_conf(file, basic_settings, trace_name, optimal_LFU_percentage,
         
         print(f'{pprint.pformat(current_run_settings)}\n')
         
-        single_run_result = simulatools.single_run('window_ca_burst_block', trace_file=file, trace_folder='latency', 
+        single_run_result = simulatools.single_run('window_ca_burst_block', trace_files=[file], trace_folder='latency', 
                                                     trace_format='LATENCY', size=cache_size, 
                                                     additional_settings=settings,
                                                     name=f'{fname}-{cache_size}-{aging_window_size}-{aging_alpha:.3f}-WBBCA',
@@ -120,7 +120,7 @@ def main():
     parser.add_argument('--optimals', help='The path to a pickle file containing the optimal results for each trace for reference to the correct LFU-LRU ratio to use', 
                         type=str, required=True)
     parser.add_argument('--time', help='The time of the second dist to check, Default: ALL', 
-                        type=int, required=False)
+                        type=int, required=True)
     parser.add_argument('--random-aging', help='Toggle for the naive random aging estimation for baseline of the aging mechanism', action='store_true')
     
     args = parser.parse_args()
@@ -156,7 +156,7 @@ def main():
         cache_size = SIZES.get(trace_name)
         
         if cache_size is not None:
-            optimal_LFU_percentage = optimals.get((fname, cache_size))[0] / 100
+            optimal_LFU_percentage = optimals.get((trace_name, args.time, cache_size))[0] / 100
             
             run_baseline(file, trace_name, cache_size, optimal_LFU_percentage)
             for bb_percentage in BB_PERCENTAGES:
