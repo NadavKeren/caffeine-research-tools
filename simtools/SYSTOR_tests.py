@@ -76,7 +76,7 @@ def run_baseline(fname: str, trace_name: str, cache_size: int, optimal_LFU_perce
             single_run_result.to_pickle(f'./results/{pickle_filename}')   
 
 
-def run_single_conf(file, basic_settings, trace_name, optimal_LFU_percentage, 
+def run_single_conf(fname, basic_settings, trace_name, optimal_LFU_percentage, 
                     cache_size, bb_percentage):
     pickle_filename = f'{fname}-{cache_size}-{bb_percentage}-SYSTOR.pickle'
     if (not path.isfile(f'./results/{pickle_filename}')): # * Skipping tests with existing results        
@@ -94,7 +94,7 @@ def run_single_conf(file, basic_settings, trace_name, optimal_LFU_percentage,
         
         print(f'{pprint.pformat(current_run_settings)}\n')
         
-        single_run_result = simulatools.single_run('window_ca_burst_block', trace_files=[file], trace_folder='latency', 
+        single_run_result = simulatools.single_run('window_ca_burst_block', trace_files=[fname], trace_folder='latency', 
                                                     trace_format='LATENCY', size=cache_size, 
                                                     additional_settings=settings,
                                                     name=f'{fname}-{cache_size}-{aging_window_size}-{aging_alpha:.3f}-WBBCA',
