@@ -31,8 +31,8 @@ CA_BB_SETTINGS = {"ca-bb-window.percent-main" : [0.9], "ca-bb-window.percent-mai
 
 CA_WINDOW_SETTINGS = {"ca-window.percent-main-protected" : 0.8, "ca-window.cra.decay-factor" : 1, "ca-window.cra.max-lists" : 10}
 
-ADAPTIVE_CA_BB_SETTINGS = {"adaptive-ca-bb.num-of-quanta" : 32, "adaptive-ca-bb.quota-probation" : 4, "adaptive-ca-bb.quota-protected" : 16,
-                           "adaptive-ca-bb.quota-window" : 4, "adaptive-ca-bb.quota-bc" : 8, "adaptive-ca-bb.adaption-multiplier" : 15}
+ADAPTIVE_CA_BB_SETTINGS = {"adaptive-ca-bb.num-of-quanta" : 16, "adaptive-ca-bb.quota-probation" : 2, "adaptive-ca-bb.quota-protected" : 8,
+                           "adaptive-ca-bb.quota-window" : 2, "adaptive-ca-bb.quota-bc" : 4, "adaptive-ca-bb.adaption-multiplier" : 10}
 
 ADAPTIVE_CA_SETTINGS = {"ca-hill-climber-window.strategy" : ["simple"], "ca-hill-climber-window.percent-main" : [0.875], "ca-hill-climber-window: percent-main-protected" : 0.85,
                         "ca-hill-climber-window.cra.decay-factor" : 1, "ca-hill-climber-window.cra.max-lists" : 10, 
