@@ -8,6 +8,7 @@ from os import path, listdir, makedirs
 from shutil import move
 import time
 from datetime import timedelta
+import datetime
 import json
 
 import pandas as pd
@@ -31,8 +32,14 @@ CA_BB_SETTINGS = {"ca-bb-window.percent-main" : [0.9], "ca-bb-window.percent-mai
 
 CA_WINDOW_SETTINGS = {"ca-window.percent-main-protected" : 0.8, "ca-window.cra.decay-factor" : 1, "ca-window.cra.max-lists" : 10}
 
-ADAPTIVE_CA_BB_SETTINGS = {"adaptive-ca-bb.num-of-quanta" : 16, "adaptive-ca-bb.quota-probation" : 2, "adaptive-ca-bb.quota-protected" : 8,
+ADAPTIVE_CA_BB_SETTINGS_LFU_START = {"adaptive-ca-bb.num-of-quanta" : 16, "adaptive-ca-bb.quota-probation" : 2, "adaptive-ca-bb.quota-protected" : 8,
                            "adaptive-ca-bb.quota-window" : 2, "adaptive-ca-bb.quota-bc" : 4, "adaptive-ca-bb.adaption-multiplier" : 10}
+
+ADAPTIVE_CA_BB_SETTINGS_LRU_START = {"adaptive-ca-bb.num-of-quanta" : 16, "adaptive-ca-bb.quota-probation" : 2, "adaptive-ca-bb.quota-protected" : 2,
+                           "adaptive-ca-bb.quota-window" : 8, "adaptive-ca-bb.quota-bc" : 4, "adaptive-ca-bb.adaption-multiplier" : 10}
+
+ADAPTIVE_CA_BB_SETTINGS_BC_START = {"adaptive-ca-bb.num-of-quanta" : 16, "adaptive-ca-bb.quota-probation" : 2, "adaptive-ca-bb.quota-protected" : 2,
+                           "adaptive-ca-bb.quota-window" : 2, "adaptive-ca-bb.quota-bc" : 10, "adaptive-ca-bb.adaption-multiplier" : 10}
 
 ADAPTIVE_CA_SETTINGS = {"ca-hill-climber-window.strategy" : ["simple"], "ca-hill-climber-window.percent-main" : [0.875], "ca-hill-climber-window: percent-main-protected" : 0.85,
                         "ca-hill-climber-window.cra.decay-factor" : 1, "ca-hill-climber-window.cra.max-lists" : 10, 
@@ -40,7 +47,7 @@ ADAPTIVE_CA_SETTINGS = {"ca-hill-climber-window.strategy" : ["simple"], "ca-hill
                         "ca-hill-climber-window.simple.tolerance" : 0, "ca-hill-climber-window.simple.step-decay-rate" : 0.98,
                         "ca-hill-climber-window.simple.sample-decay-rate" : 1, "ca-hill-climber-window.simple.restart-threshold" : 0.05}
 
-SETTINGS = {**CA_BB_SETTINGS, **CA_WINDOW_SETTINGS, **ADAPTIVE_CA_BB_SETTINGS, **ADAPTIVE_CA_SETTINGS}
+SETTINGS = {**CA_BB_SETTINGS, **CA_WINDOW_SETTINGS, **ADAPTIVE_CA_SETTINGS}
 
 
 class Colors():
@@ -77,45 +84,60 @@ def get_times(fname: str):
 
 
 def run_adaptive_CA(fname: str, trace_name: str, times: str, cache_size: int) -> None:
-    pickle_filename = f'adaptive-CA-{trace_name}-{times}.pickle'
-    dump_filename = f'adaptive-CA-adaptions-{trace_name}-{times}.dump'
+    pickle_filename = f'adaptive-CA-{trace_name}-{times}-{cache_size}.pickle'
+    dump_filename = f'adaptive-CA-adaptions-{trace_name}-{times}-{cache_size}.dump'
     
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_ca', dump_filename)
     
     
 def run_adaptive_CA_BB(fname: str, trace_name: str, times: str, cache_size: int) -> None:
-    pickle_filename = f'adaptive-CA-BB-{trace_name}-{times}.pickle'
-    dump_filename = f'adaptive-CA-BB-adaptions-{trace_name}-{times}.dump'
+    pickle_filename = f'adaptive-CA-BB-{trace_name}-{times}-{cache_size}-LRU.pickle'
+    dump_filename = f'adaptive-CA-BB-adaptions-{trace_name}-{times}-{cache_size}-LRU.dump'
     
-    run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_ca_burst', dump_filename)
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_ca_burst', dump_filename, name="LRU",
+             additional_settings=ADAPTIVE_CA_BB_SETTINGS_LRU_START)
+    
+    pickle_filename = f'adaptive-CA-BB-{trace_name}-{times}-{cache_size}-LFU.pickle'
+    dump_filename = f'adaptive-CA-BB-adaptions-{trace_name}-{times}-{cache_size}-LFU.dump'
+    
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_ca_burst', dump_filename, name="LFU",
+             additional_settings=ADAPTIVE_CA_BB_SETTINGS_LFU_START)
+    
+    pickle_filename = f'adaptive-CA-BB-{trace_name}-{times}-{cache_size}-BC.pickle'
+    dump_filename = f'adaptive-CA-BB-adaptions-{trace_name}-{times}-{cache_size}-BC.dump'
+    
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_ca_burst', dump_filename, name="BC",
+             additional_settings=ADAPTIVE_CA_BB_SETTINGS_BC_START)
+    
     
 def run_static_CA_BB(fname: str, trace_name: str, times: str, cache_size: int) -> None:
-    pickle_filename = f'static-CA-BB-{trace_name}-{times}-0.1-BC.pickle'
+    pickle_filename = f'static-CA-BB-{trace_name}-{times}-{cache_size}-0.1-BC.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca_burst_block', 
              additional_settings={"ca-bb-window.percent-burst-block" : 0.1}, name='BC-0.1', additional_pickle_data={'Burst Cache Percentage' : 10})
     
-    pickle_filename = f'static-CA-BB-{trace_name}-{times}-0.8-BC.pickle'
+    pickle_filename = f'static-CA-BB-{trace_name}-{times}-{cache_size}--0.8-BC.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca_burst_block', 
              additional_settings={"ca-bb-window.percent-burst-block" : 0.8}, name='BC-0.8', additional_pickle_data={'Burst Cache Percentage' : 80})
     
     
 def run_window_CA(fname: str, trace_name: str, times: str, cache_size: int) -> None:
-        pickle_filename = f'window-CA-{trace_name}-{times}-0.1-LRU.pickle'
+        pickle_filename = f'window-CA-{trace_name}-{times}-{cache_size}-0.1-LRU.pickle'
         run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca', 
                 additional_settings={"ca-window.percent-main" : [0.9]}, name='LRU-0.1', additional_pickle_data={'LRU Percentage' : 10})
         
-        pickle_filename = f'window-CA-{trace_name}-{times}-0.5-LRU.pickle'
+        pickle_filename = f'window-CA-{trace_name}-{times}-{cache_size}-0.5-LRU.pickle'
         run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca', 
                 additional_settings={"ca-window.percent-main" : [0.5]}, name='LRU-0.5', additional_pickle_data={'LRU Percentage' : 50})
         
-        pickle_filename = f'window-CA-{trace_name}-{times}-0.9-LRU.pickle'
+        pickle_filename = f'window-CA-{trace_name}-{times}-{cache_size}-0.9-LRU.pickle'
         run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca', 
                 additional_settings={"ca-window.percent-main" : [0.1]}, name='LRU-0.9', additional_pickle_data={'LRU Percentage' : 90})
 
         
 def run_test(fname: str, trace_name: str, times: str, cache_size: int, pickle_filename : str,
              algorithm : str, dump_filename : str = None, additional_settings = None, name = None, additional_pickle_data = None) -> None:
-    print(f'{Colors.pink}Running {algorithm} on file: {fname} at pickle: {pickle_filename}{Colors.reset}')
+    now = datetime.datetime.now()
+    print(f'{now.strftime("%H:%M:%S")}: {Colors.pink}Running {algorithm} on file: {fname} at pickle: {pickle_filename}{Colors.reset}')
     
     if (path.isfile(f'./results/{pickle_filename}')): # * Skipping tests with existing results        
         return
@@ -156,7 +178,7 @@ def main():
     args = parser.parse_args()
     
     print(f'{Colors.pink}Running with args:\n{pprint.pformat(args)}{Colors.reset}')
-    files_tested = [f for f in listdir(f'{TRACES_DIR}/latency')]
+    files_tested = [f for f in listdir(f'{TRACES_DIR}/latency') if path.isfile(f'{TRACES_DIR}/latency/{f}')]
     
     if (args.trace is not None):
         files_tested = [f for f in files_tested if (args.trace in f.lower())]
@@ -170,9 +192,10 @@ def main():
         print(f'{Colors.lightblue}Testing file: {file}{Colors.reset}')
         trace_name = get_trace_name(file)
         times = get_times(file)
-        cache_size = SIZES.get(trace_name)
+        optimal_size = SIZES.get(trace_name)
+        cache_sizes = [optimal_size / 4, optimal_size / 2, optimal_size, optimal_size * 2]
         
-        if cache_size is not None:
+        for cache_size in cache_sizes:
             run_adaptive_CA(file, trace_name, times, cache_size)
             run_adaptive_CA_BB(file, trace_name, times, cache_size)
             run_static_CA_BB(file, trace_name, times, cache_size)
