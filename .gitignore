@@ -5,11 +5,16 @@ conf.json
 csvs/
 *.csv
 
-# Pickle Files
+# Results Files
 *.pickle
- 
-# Saved results
+*.dump 
+*.xz
+*.trace
+*.png
 *.txt
+*.svg
+*.jpg
+*.log
  
 # Python temp files
 __pycache__/
