@@ -47,6 +47,37 @@ ADAPTIVE_CA_SETTINGS = {"ca-hill-climber-window.strategy" : ["simple"], "ca-hill
                         "ca-hill-climber-window.simple.tolerance" : 0, "ca-hill-climber-window.simple.step-decay-rate" : 0.98,
                         "ca-hill-climber-window.simple.sample-decay-rate" : 1, "ca-hill-climber-window.simple.restart-threshold" : 0.05}
 
+ADAPTIVE_PIPELINE_SETTINGS = {"adaptive-pipeline.num-of-block" : 3, "adaptive-pipeline.num-of-quanta" : 16, "adaptive-pipeline.adaption-multiplier" : 15,
+                              "adaptive-pipeline.burst.aging-window-size" : 50, "adaptive-pipeline.burst.age-smoothing" : 0.0025, 
+                              "adaptive-pipeline.burst.number-of-partitions" : 4}
+
+ADAPTIVE_PIPELINE_LRU_START_SETTINGS = {**ADAPTIVE_PIPELINE_SETTINGS, "adaptive-pipeline.blocks.0.type": "LRU",
+                                        "adaptive-pipeline.blocks.0.quota": 12, "adaptive-pipeline.blocks.0.decay-factor" : 1, 
+                                        "adaptive-pipeline.blocks.0.max-lists" : 10,
+                                        "adaptive-pipeline.blocks.1.type": "LFU",
+                                        "adaptive-pipeline.blocks.1.quota": 2, "adaptive-pipeline.blocks.1.decay-factor" : 1, 
+                                        "adaptive-pipeline.blocks.1.max-lists" : 10,
+                                        "adaptive-pipeline.blocks.2.type": "BC",
+                                        "adaptive-pipeline.blocks.2.quota": 2}
+
+ADAPTIVE_PIPELINE_LFU_START_SETTINGS = {**ADAPTIVE_PIPELINE_SETTINGS, "adaptive-pipeline.blocks.0.type": "LRU",
+                                        "adaptive-pipeline.blocks.0.quota": 2, "adaptive-pipeline.blocks.0.decay-factor" : 1, 
+                                        "adaptive-pipeline.blocks.0.max-lists" : 10,
+                                        "adaptive-pipeline.blocks.1.type": "LFU",
+                                        "adaptive-pipeline.blocks.1.quota": 12, "adaptive-pipeline.blocks.1.decay-factor" : 1, 
+                                        "adaptive-pipeline.blocks.1.max-lists" : 10,
+                                        "adaptive-pipeline.blocks.2.type": "BC",
+                                        "adaptive-pipeline.blocks.2.quota": 2}
+
+ADAPTIVE_PIPELINE_BC_START_SETTINGS = {**ADAPTIVE_PIPELINE_SETTINGS, "adaptive-pipeline.blocks.0.type": "LRU",
+                                        "adaptive-pipeline.blocks.0.quota": 2, "adaptive-pipeline.blocks.0.decay-factor" : 1, 
+                                        "adaptive-pipeline.blocks.0.max-lists" : 10,
+                                        "adaptive-pipeline.blocks.1.type": "LFU",
+                                        "adaptive-pipeline.blocks.1.quota": 2, "adaptive-pipeline.blocks.1.decay-factor" : 1, 
+                                        "adaptive-pipeline.blocks.1.max-lists" : 10,
+                                        "adaptive-pipeline.blocks.2.type": "BC",
+                                        "adaptive-pipeline.blocks.2.quota": 12}
+
 SETTINGS = {**CA_BB_SETTINGS, **CA_WINDOW_SETTINGS, **ADAPTIVE_CA_SETTINGS}
 
 
@@ -108,6 +139,26 @@ def run_adaptive_CA_BB(fname: str, trace_name: str, times: str, cache_size: int)
     
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_ca_burst', dump_filename, name="BC",
              additional_settings=ADAPTIVE_CA_BB_SETTINGS_BC_START)
+    
+def run_adaptive_pipeline(fname: str, trace_name: str, times: str, cache_size: int) -> None:
+    quantum_size = cache_size // 16
+    pickle_filename = f'adaptive-pipeline-{trace_name}-{times}-{cache_size}-LRU.pickle'
+    dump_filename = f'adaptive-pipeline-adaptions-{trace_name}-{times}-{cache_size}-LRU.dump'
+    
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_pipeline', dump_filename, name="LRU",
+             additional_settings={**ADAPTIVE_PIPELINE_LRU_START_SETTINGS, "adaptive-pipeline.quantum-size" : quantum_size})
+    
+    pickle_filename = f'adaptive-pipeline-{trace_name}-{times}-{cache_size}-LFU.pickle'
+    dump_filename = f'adaptive-pipeline-adaptions-{trace_name}-{times}-{cache_size}-LFU.dump'
+    
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_pipeline', dump_filename, name="LFU",
+             additional_settings={**ADAPTIVE_PIPELINE_LFU_START_SETTINGS, "adaptive-pipeline.quantum-size" : quantum_size})
+    
+    pickle_filename = f'adaptive-pipeline-{trace_name}-{times}-{cache_size}-BC.pickle'
+    dump_filename = f'adaptive-pipeline-adaptions-{trace_name}-{times}-{cache_size}-BC.dump'
+    
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_pipeline', dump_filename, name="BC",
+             additional_settings={**ADAPTIVE_PIPELINE_BC_START_SETTINGS, "adaptive-pipeline.quantum-size" : quantum_size})
     
     
 def run_static_CA_BB(fname: str, trace_name: str, times: str, cache_size: int) -> None:
@@ -200,6 +251,7 @@ def main():
             run_adaptive_CA_BB(file, trace_name, times, cache_size)
             run_static_CA_BB(file, trace_name, times, cache_size)
             run_window_CA(file, trace_name, times, cache_size)
+            run_adaptive_pipeline(file, trace_name, times, cache_size)
                 
     print(f'{Colors.bold}{Colors.green}Done\n#####################\n\n{Colors.reset}')
 

@@ -12,3 +12,4 @@ class Policy(Enum):
     window_ca_burst_cal = 'sketch.WindowCABurstCal'
     adaptive_ca = 'sketch.ACA'
     adaptive_ca_burst = 'sketch.AdaptiveCAWithBB'
+    adaptive_pipeline = 'sketch.AdaptivePipeline'
