@@ -49,7 +49,7 @@ ADAPTIVE_CA_SETTINGS = {"ca-hill-climber-window.strategy" : ["simple"], "ca-hill
 
 ADAPTIVE_PIPELINE_SETTINGS = {"adaptive-pipeline.num-of-block" : 3, "adaptive-pipeline.num-of-quanta" : 16, "adaptive-pipeline.adaption-multiplier" : 15,
                               "adaptive-pipeline.burst.aging-window-size" : 50, "adaptive-pipeline.burst.age-smoothing" : 0.0025, 
-                              "adaptive-pipeline.burst.number-of-partitions" : 4}
+                              "adaptive-pipeline.burst.number-of-partitions" : 4, "adaptive-pipeline.ghost-size" : 1}
 
 ADAPTIVE_PIPELINE_LRU_START_SETTINGS = {**ADAPTIVE_PIPELINE_SETTINGS, "adaptive-pipeline.blocks.0.type": "LRU",
                                         "adaptive-pipeline.blocks.0.quota": 12, "adaptive-pipeline.blocks.0.decay-factor" : 1, 
