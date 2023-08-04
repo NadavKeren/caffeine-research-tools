@@ -122,7 +122,7 @@ def run_test(fname: str, trace_name: str, times: str, cache_size: int, pickle_fi
     if (path.isfile(f'./results/{pickle_filename}')): # * Skipping tests with existing results        
         return
     
-    settings = SETTINGS if additional_settings is None else {**SETTINGS, **additional_settings}
+    settings = ADAPTIVE_PIPELINE_SETTINGS if additional_settings is None else {**ADAPTIVE_PIPELINE_SETTINGS, **additional_settings}
         
     single_run_result = simulatools.single_run(algorithm, trace_files=[fname], trace_folder='latency', 
                                                 trace_format='LATENCY', size=cache_size,
