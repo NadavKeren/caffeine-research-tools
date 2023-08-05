@@ -25,8 +25,8 @@ SIZES = {'trace010' : 2 ** 10, 'trace024' : 2 ** 10, 'trace031' : 2 ** 16,
          'trace045' : 2 ** 12, 'trace034' : 2 ** 14, 'trace029' : 2 ** 9,
          'trace012' : 2 ** 10}
 
-CA_BB_SETTINGS = {"ca-bb-window.percent-main" : [0.9], "ca-bb-window.percent-main-protected" : 0.8,
-                  "ca-bb-window.aging-window-size" : 300, "ca-bb-window.age-smoothing" : 0.01, 
+CA_BB_SETTINGS = {"ca-bb-window.percent-main" : [0.5], "ca-bb-window.percent-main-protected" : 0.8,
+                  "ca-bb-window.aging-window-size" : 50, "ca-bb-window.age-smoothing" : 0.0025, 
                   "ca-bb-window.number-of-partitions" : 4, "ca-bb-window.burst-strategy" : "naive", 
                   "ca-bb-window.cra.decayFactors" : 1, "ca-bb-window.cra.max-lists" : 10}
 
@@ -244,7 +244,7 @@ def main():
         trace_name = get_trace_name(file)
         times = get_times(file)
         optimal_size = SIZES.get(trace_name)
-        cache_sizes = [optimal_size / 4, optimal_size / 2, optimal_size, optimal_size * 2]
+        cache_sizes = [optimal_size // 4, optimal_size // 2, optimal_size, optimal_size * 2, optimal_size * 4]
         
         for cache_size in cache_sizes:
             run_adaptive_CA(file, trace_name, times, cache_size)
