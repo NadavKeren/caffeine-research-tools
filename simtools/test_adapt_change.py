@@ -168,7 +168,7 @@ def main():
     
     makedirs('./results', exist_ok=True)
     
-    ghost_sizes = [1, 2]
+    ghost_sizes = [1] #, 2]
     for file in files_tested:
         print(f'{Colors.lightblue}Testing file: {file}{Colors.reset}')
         trace_name = get_trace_name(file)
