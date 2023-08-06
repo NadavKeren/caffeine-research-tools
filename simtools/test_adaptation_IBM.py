@@ -21,7 +21,7 @@ resources = local_conf['resources'] if local_conf['resources'] != '' else caffei
 TRACES_DIR = f'{resources}'
 
 
-SIZES = {'trace010' : 2 ** 10, 'trace024' : 2 ** 10, 'trace031' : 2 ** 16,
+SIZES = {'trace010' : 2 ** 10, 'trace024' : 2 ** 9, 'trace031' : 2 ** 16,
          'trace045' : 2 ** 12, 'trace034' : 2 ** 14, 'trace029' : 2 ** 9,
          'trace012' : 2 ** 10}
 
@@ -166,9 +166,13 @@ def run_static_CA_BB(fname: str, trace_name: str, times: str, cache_size: int) -
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca_burst_block', 
              additional_settings={"ca-bb-window.percent-burst-block" : 0.1}, name='BC-0.1', additional_pickle_data={'Burst Cache Percentage' : 10})
     
-    pickle_filename = f'static-CA-BB-{trace_name}-{times}-{cache_size}--0.8-BC.pickle'
+    pickle_filename = f'static-CA-BB-{trace_name}-{times}-{cache_size}--0.5-BC.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca_burst_block', 
-             additional_settings={"ca-bb-window.percent-burst-block" : 0.8}, name='BC-0.8', additional_pickle_data={'Burst Cache Percentage' : 80})
+             additional_settings={"ca-bb-window.percent-burst-block" : 0.5}, name='BC-0.5', additional_pickle_data={'Burst Cache Percentage' : 50})
+    
+    pickle_filename = f'static-CA-BB-{trace_name}-{times}-{cache_size}--0.9-BC.pickle'
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca_burst_block', 
+             additional_settings={"ca-bb-window.percent-burst-block" : 0.9}, name='BC-0.9', additional_pickle_data={'Burst Cache Percentage' : 90})
     
     
 def run_window_CA(fname: str, trace_name: str, times: str, cache_size: int) -> None:
@@ -251,7 +255,7 @@ def main():
             run_adaptive_CA_BB(file, trace_name, times, cache_size)
             run_static_CA_BB(file, trace_name, times, cache_size)
             run_window_CA(file, trace_name, times, cache_size)
-            run_adaptive_pipeline(file, trace_name, times, cache_size)
+            # run_adaptive_pipeline(file, trace_name, times, cache_size)
                 
     print(f'{Colors.bold}{Colors.green}Done\n#####################\n\n{Colors.reset}')
 
