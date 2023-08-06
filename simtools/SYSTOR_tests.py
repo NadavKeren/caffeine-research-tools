@@ -19,7 +19,7 @@ resources = local_conf['resources'] if local_conf['resources'] != '' else caffei
 TRACES_DIR = f'{resources}'
 
 
-SIZES = {'trace010' : 2 ** 10, 'trace024' : 2 ** 10, 'trace031' : 2 ** 16,
+SIZES = {'trace010' : 2 ** 10, 'trace024' : 2 ** 9, 'trace031' : 2 ** 16,
          'trace045' : 2 ** 12, 'trace034' : 2 ** 14, 'trace029' : 2 ** 9,
          'trace012' : 2 ** 10}
 BB_PERCENTAGES = arange(0.1, 1, 0.1)
