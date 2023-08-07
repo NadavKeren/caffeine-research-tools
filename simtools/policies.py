@@ -16,3 +16,4 @@ class Policy(Enum):
     
     ca_arc = "adaptive.CA-Arc"
     hyperbolic = "sampled.Hyperbolic"
+    gdwheel = "greedy-dual.GDWheel"

@@ -187,6 +187,17 @@ def run_window_CA(fname: str, trace_name: str, times: str, cache_size: int) -> N
         pickle_filename = f'window-CA-{trace_name}-{times}-{cache_size}-0.9-LRU.pickle'
         run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca', 
                 additional_settings={"ca-window.percent-main" : [0.1]}, name='LRU-0.9', additional_pickle_data={'LRU Percentage' : 90})
+        
+        
+def run_additional(fname: str, trace_name: str, times: str, cache_size: int) -> None:
+    pickle_filename = f'CA-ARC-{trace_name}-{times}-{cache_size}.pickle'
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'ca_arc')
+    
+    pickle_filename = f'Hyperbolic-{trace_name}-{times}-{cache_size}.pickle'
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'hyperbolic')
+    
+    pickle_filename = f'GDWheel-{trace_name}-{times}-{cache_size}.pickle'
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'gdwheel')
 
         
 def run_test(fname: str, trace_name: str, times: str, cache_size: int, pickle_filename : str,
@@ -255,6 +266,7 @@ def main():
             run_adaptive_CA_BB(file, trace_name, times, cache_size)
             run_static_CA_BB(file, trace_name, times, cache_size)
             run_window_CA(file, trace_name, times, cache_size)
+            run_additional(file, trace_name, times, cache_size)
             # run_adaptive_pipeline(file, trace_name, times, cache_size)
                 
     print(f'{Colors.bold}{Colors.green}Done\n#####################\n\n{Colors.reset}')
