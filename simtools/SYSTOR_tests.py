@@ -23,7 +23,6 @@ SIZES = {'trace010' : 2 ** 10, 'trace024' : 2 ** 9, 'trace031' : 2 ** 16,
          'trace045' : 2 ** 12, 'trace034' : 2 ** 14, 'trace029' : 2 ** 9,
          'trace012' : 2 ** 10}
 BB_PERCENTAGES = arange(0.1, 1, 0.1)
-CONFIGURATIONS = {'trace031' : (300, 0.001), 'trace024' : (200, 0.01), 'trace010' : (50, 0.005)}
 
 class Colors():
     reset='\033[0m'
@@ -84,11 +83,10 @@ def run_single_conf(fname, basic_settings, trace_name, optimal_LFU_percentage,
             print(f'{Colors.bold}{Colors.red}Error in {fname}: Bad optimal, exiting{Colors.reset}')
             exit(1)
         
-        aging_window_size, aging_alpha = CONFIGURATIONS.get(trace_name, (300, 0.001))
         current_run_settings = {'ca-bb-window.percent-main' : [optimal_LFU_percentage],
                                 'ca-bb-window.percent-burst-block' : bb_percentage,
-                                'ca-bb-window.aging-window-size': aging_window_size,
-                                'ca-bb-window.age-smoothing' : aging_alpha}
+                                "ca-bb-window.aging-window-size" : 50, 
+                                "ca-bb-window.age-smoothing" : 0.0025}
         settings = {**basic_settings, 
                     **current_run_settings}
         
@@ -97,7 +95,7 @@ def run_single_conf(fname, basic_settings, trace_name, optimal_LFU_percentage,
         single_run_result = simulatools.single_run('window_ca_burst_block', trace_files=[fname], trace_folder='latency', 
                                                     trace_format='LATENCY', size=cache_size, 
                                                     additional_settings=settings,
-                                                    name=f'{fname}-{cache_size}-{aging_window_size}-{aging_alpha:.3f}-WBBCA',
+                                                    name=f'{fname}-{cache_size}-WBBCA',
                                                     save = False)
         
         if (single_run_result is False):
@@ -107,9 +105,8 @@ def run_single_conf(fname, basic_settings, trace_name, optimal_LFU_percentage,
             single_run_result['BB Percentage'] = int(bb_percentage * 100)
             single_run_result['Cache Size'] = cache_size
             single_run_result['Trace'] = trace_name
-            
-            single_run_result['Aging Window Size'] = aging_window_size
-            single_run_result['Aging Alpha'] = aging_alpha
+            single_run_result['Aging Window Size'] = 50
+            single_run_result['Aging Alpha'] = 0.0025
             
             single_run_result.to_pickle(f'./results/{pickle_filename}')
 
@@ -120,7 +117,7 @@ def main():
     parser.add_argument('--optimals', help='The path to a pickle file containing the optimal results for each trace for reference to the correct LFU-LRU ratio to use', 
                         type=str, required=True)
     parser.add_argument('--time', help='The time of the second dist to check, Default: ALL', 
-                        type=int, required=True)
+                        type=int, required=False)
     parser.add_argument('--random-aging', help='Toggle for the naive random aging estimation for baseline of the aging mechanism', action='store_true')
     
     args = parser.parse_args()

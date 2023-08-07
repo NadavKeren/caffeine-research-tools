@@ -83,7 +83,7 @@ def main():
         cache_size = SIZES[trace_name]
         for lfu_percentage in LFU_PERCENTAGES:
             print(f'Running with {cache_size} and LFU: {int(lfu_percentage * 100)}%')
-            single_run_result = simulatools.single_run('window_ca', trace_file=file, trace_folder='latency', 
+            single_run_result = simulatools.single_run('window_ca', trace_files=[file], trace_folder='latency', 
                                                         trace_format='LATENCY', size=cache_size, 
                                                         additional_settings={**basic_settings, 
                                                                             'ca-window.percent-main' : [lfu_percentage]},
@@ -93,10 +93,12 @@ def main():
             if (single_run_result is False):
                 print(f'{Colors.bold}{Colors.red}Error in {file}: exiting{Colors.reset}')
             else:
+                print(single_run_result)
                 single_run_result['LFU Percentage'] = int(lfu_percentage * 100)
                 single_run_result['Cache Size'] = cache_size
                 single_run_result['Trace'] = trace_name
                 single_run_result['File'] = file
+                print(single_run_result[['LFU Percentage', 'Hit Rate', 'Average Penalty']])
                 single_run_result.to_pickle(f'./results/{file}-{cache_size}-{int(lfu_percentage * 100)}-LFU-LRU-res.pickle')
 
 
