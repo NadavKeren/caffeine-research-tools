@@ -13,3 +13,6 @@ class Policy(Enum):
     adaptive_ca = 'sketch.ACA'
     adaptive_ca_burst = 'sketch.AdaptiveCAWithBB'
     adaptive_pipeline = 'sketch.AdaptivePipeline'
+    
+    ca_arc = "adaptive.CA-Arc"
+    hyperbolic = "sampled.Hyperbolic"
