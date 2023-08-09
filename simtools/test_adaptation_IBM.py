@@ -33,13 +33,19 @@ CA_BB_SETTINGS = {"ca-bb-window.percent-main" : [0.5], "ca-bb-window.percent-mai
 CA_WINDOW_SETTINGS = {"ca-window.percent-main-protected" : 0.8, "ca-window.cra.decay-factor" : 1, "ca-window.cra.max-lists" : 10}
 
 ADAPTIVE_CA_BB_SETTINGS_LFU_START = {"adaptive-ca-bb.num-of-quanta" : 16, "adaptive-ca-bb.quota-probation" : 2, "adaptive-ca-bb.quota-protected" : 8,
-                           "adaptive-ca-bb.quota-window" : 2, "adaptive-ca-bb.quota-bc" : 4, "adaptive-ca-bb.adaption-multiplier" : 10}
+                           "adaptive-ca-bb.quota-window" : 2, "adaptive-ca-bb.quota-bc" : 4, "adaptive-ca-bb.adaption-multiplier" : 10, "adaptive-ca-bb.allow-bc": True}
 
 ADAPTIVE_CA_BB_SETTINGS_LRU_START = {"adaptive-ca-bb.num-of-quanta" : 16, "adaptive-ca-bb.quota-probation" : 2, "adaptive-ca-bb.quota-protected" : 2,
-                           "adaptive-ca-bb.quota-window" : 8, "adaptive-ca-bb.quota-bc" : 4, "adaptive-ca-bb.adaption-multiplier" : 10}
+                           "adaptive-ca-bb.quota-window" : 8, "adaptive-ca-bb.quota-bc" : 4, "adaptive-ca-bb.adaption-multiplier" : 10, "adaptive-ca-bb.allow-bc": True}
 
 ADAPTIVE_CA_BB_SETTINGS_BC_START = {"adaptive-ca-bb.num-of-quanta" : 16, "adaptive-ca-bb.quota-probation" : 2, "adaptive-ca-bb.quota-protected" : 2,
-                           "adaptive-ca-bb.quota-window" : 2, "adaptive-ca-bb.quota-bc" : 10, "adaptive-ca-bb.adaption-multiplier" : 10}
+                           "adaptive-ca-bb.quota-window" : 2, "adaptive-ca-bb.quota-bc" : 10, "adaptive-ca-bb.adaption-multiplier" : 10, "adaptive-ca-bb.allow-bc": True}
+
+NEW_ADAPTIVE_CA_SETTINGS_LRU_START = {"adaptive-ca-bb.num-of-quanta" : 16, "adaptive-ca-bb.quota-probation" : 1, "adaptive-ca-bb.quota-protected" : 1,
+                           "adaptive-ca-bb.quota-window" : 14, "adaptive-ca-bb.quota-bc" : 0, "adaptive-ca-bb.adaption-multiplier" : 10, "adaptive-ca-bb.allow-bc": False}
+
+NEW_ADAPTIVE_CA_SETTINGS_LFU_START = {"adaptive-ca-bb.num-of-quanta" : 16, "adaptive-ca-bb.quota-probation" : 1, "adaptive-ca-bb.quota-protected" : 13,
+                           "adaptive-ca-bb.quota-window" : 2, "adaptive-ca-bb.quota-bc" : 0, "adaptive-ca-bb.adaption-multiplier" : 10, "adaptive-ca-bb.allow-bc": False}
 
 ADAPTIVE_CA_SETTINGS = {"ca-hill-climber-window.strategy" : ["simple"], "ca-hill-climber-window.percent-main" : [0.875], "ca-hill-climber-window: percent-main-protected" : 0.85,
                         "ca-hill-climber-window.cra.decay-factor" : 1, "ca-hill-climber-window.cra.max-lists" : 10, 
@@ -139,6 +145,19 @@ def run_adaptive_CA_BB(fname: str, trace_name: str, times: str, cache_size: int)
     
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_ca_burst', dump_filename, name="BC",
              additional_settings=ADAPTIVE_CA_BB_SETTINGS_BC_START)
+    
+def run_new_adaptive_CA(fname: str, trace_name: str, times: str, cache_size: int) -> None:
+    pickle_filename = f'new-adaptive-CA-{trace_name}-{times}-{cache_size}-LRU.pickle'
+    dump_filename = f'new-adaptive-CA-adaptions-{trace_name}-{times}-{cache_size}.dump'
+    
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_ca_burst', dump_filename, name="LRU",
+             additional_settings=NEW_ADAPTIVE_CA_SETTINGS_LRU_START)
+    
+    pickle_filename = f'new-adaptive-CA-{trace_name}-{times}-{cache_size}-LFU.pickle'
+    dump_filename = f'new-adaptive-CA-adaptions-{trace_name}-{times}-{cache_size}.dump'
+    
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_ca_burst', dump_filename, name="LRU",
+             additional_settings=NEW_ADAPTIVE_CA_SETTINGS_LFU_START)
     
 def run_adaptive_pipeline(fname: str, trace_name: str, times: str, cache_size: int) -> None:
     quantum_size = cache_size // 16
@@ -266,6 +285,7 @@ def main():
             run_adaptive_CA_BB(file, trace_name, times, cache_size)
             run_static_CA_BB(file, trace_name, times, cache_size)
             run_window_CA(file, trace_name, times, cache_size)
+            run_new_adaptive_CA(file, trace_name, times, cache_size)
             run_additional(file, trace_name, times, cache_size)
             # run_adaptive_pipeline(file, trace_name, times, cache_size)
                 
