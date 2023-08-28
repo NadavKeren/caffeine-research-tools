@@ -52,7 +52,7 @@ def get_trace_name(fname: str):
 
 
 def run_baseline(fname: str, trace_name: str, cache_size: int, optimal_LFU_percentage: float):
-    pickle_filename = f'{fname}-{cache_size}-Baseline-SYSTOR.pickle'
+    pickle_filename = f'{fname}-{cache_size}-{int(optimal_LFU_percentage * 100)}-Baseline-SYSTOR.pickle'
     
     if (not path.isfile(f'./results/{pickle_filename}')): # * Skipping baseline if exists
         print(f'{Colors.cyan}Running baseline for {fname} with size {cache_size}{Colors.reset}\n')
@@ -77,9 +77,9 @@ def run_baseline(fname: str, trace_name: str, cache_size: int, optimal_LFU_perce
 
 def run_single_conf(fname, basic_settings, trace_name, optimal_LFU_percentage, 
                     cache_size, bb_percentage):
-    pickle_filename = f'{fname}-{cache_size}-{bb_percentage}-SYSTOR.pickle'
+    pickle_filename = f'{fname}-{cache_size}-{bb_percentage}-{int(optimal_LFU_percentage * 100)}-SYSTOR.pickle'
     if (not path.isfile(f'./results/{pickle_filename}')): # * Skipping tests with existing results        
-        if (optimal_LFU_percentage < 0):
+        if (optimal_LFU_percentage < 0 or optimal_LFU_percentage > 1):
             print(f'{Colors.bold}{Colors.red}Error in {fname}: Bad optimal, exiting{Colors.reset}')
             exit(1)
         
@@ -101,7 +101,8 @@ def run_single_conf(fname, basic_settings, trace_name, optimal_LFU_percentage,
         if (single_run_result is False):
             print(f'{Colors.bold}{Colors.red}Error in {fname}: exiting{Colors.reset}')
             exit(1)
-        else:                    
+        else:
+            single_run_result['Point Of Comparison'] = optimal_LFU_percentage
             single_run_result['BB Percentage'] = int(bb_percentage * 100)
             single_run_result['Cache Size'] = cache_size
             single_run_result['Trace'] = trace_name
@@ -156,9 +157,11 @@ def main():
             optimal_LFU_percentage = optimals.get((trace_name, args.time, cache_size))[0] / 100
             
             run_baseline(file, trace_name, cache_size, optimal_LFU_percentage)
+            run_baseline(file, trace_name, cache_size, 0.5)
             for bb_percentage in BB_PERCENTAGES:
                 run_single_conf(file, basic_settings, trace_name, 
                                 optimal_LFU_percentage, cache_size, bb_percentage)
+                run_single_conf(file, basic_settings, trace_name, 0.5, cache_size, bb_percentage)
                 
     print(f'{Colors.bold}{Colors.green}Done\n#####################\n\n{Colors.reset}')
 
