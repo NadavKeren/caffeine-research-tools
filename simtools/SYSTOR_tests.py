@@ -66,7 +66,7 @@ def run_baseline(fname: str, trace_name: str, cache_size: int, optimal_LFU_perce
             print(f'{Colors.bold}{Colors.red}Error in {fname}: exiting{Colors.reset}')
             exit(1)
         else:
-            print(f'{orange}baseline: {single_run_result["Average Penalty"]}{reset}')
+            print(f'{Colors.orange}baseline: {single_run_result["Average Penalty"]}{Colors.reset}')
             
             single_run_result['BB Percentage'] = 0
             single_run_result['Cache Size'] = cache_size
@@ -105,7 +105,7 @@ def run_single_conf(fname, basic_settings, trace_name, optimal_LFU_percentage,
             print(f'{Colors.bold}{Colors.red}Error in {fname}: exiting{Colors.reset}')
             exit(1)
         else:
-            print(f'{yellow}avg.pen: {single_run_result["Average Penalty"]}{reset}')
+            print(f'{Colors.yellow}avg.pen: {single_run_result["Average Penalty"]}{Colors.reset}')
             
             single_run_result['Point Of Comparison'] = optimal_LFU_percentage
             single_run_result['BB Percentage'] = int(bb_percentage * 100)
