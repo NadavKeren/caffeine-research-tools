@@ -65,7 +65,9 @@ def run_baseline(fname: str, trace_name: str, cache_size: int, optimal_LFU_perce
         if (single_run_result is False):
             print(f'{Colors.bold}{Colors.red}Error in {fname}: exiting{Colors.reset}')
             exit(1)
-        else:       
+        else:
+            print(f'{orange}baseline: {single_run_result["Average Penalty"]}{reset}')
+            
             single_run_result['BB Percentage'] = 0
             single_run_result['Cache Size'] = cache_size
             single_run_result['Trace'] = trace_name
@@ -84,13 +86,14 @@ def run_single_conf(fname, basic_settings, trace_name, optimal_LFU_percentage,
             exit(1)
         
         current_run_settings = {'ca-bb-window.percent-main' : [optimal_LFU_percentage],
-                                'ca-bb-window.percent-burst-block' : bb_percentage,
-                                "ca-bb-window.aging-window-size" : 50, 
-                                "ca-bb-window.age-smoothing" : 0.0025}
-        settings = {**basic_settings, 
+                                'ca-bb-window.percent-burst-block' : bb_percentage}
+        
+        settings = {"ca-bb-window.aging-window-size" : 50, 
+                    "ca-bb-window.age-smoothing" : 0.0025,
+                    **basic_settings, 
                     **current_run_settings}
         
-        print(f'{pprint.pformat(current_run_settings)}\n')
+        print(f'{cyan}LFU: {optimal_LFU_percentage} BC: {bb_percentage}{reset}')
         
         single_run_result = simulatools.single_run('window_ca_burst_block', trace_files=[fname], trace_folder='latency', 
                                                     trace_format='LATENCY', size=cache_size, 
@@ -102,6 +105,8 @@ def run_single_conf(fname, basic_settings, trace_name, optimal_LFU_percentage,
             print(f'{Colors.bold}{Colors.red}Error in {fname}: exiting{Colors.reset}')
             exit(1)
         else:
+            print(f'{yellow}avg.pen: {single_run_result["Average Penalty"]}{reset}')
+            
             single_run_result['Point Of Comparison'] = optimal_LFU_percentage
             single_run_result['BB Percentage'] = int(bb_percentage * 100)
             single_run_result['Cache Size'] = cache_size
