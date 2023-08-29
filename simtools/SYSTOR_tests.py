@@ -66,7 +66,7 @@ def run_baseline(fname: str, trace_name: str, cache_size: int, optimal_LFU_perce
             print(f'{Colors.bold}{Colors.red}Error in {fname}: exiting{Colors.reset}')
             exit(1)
         else:
-            print(f'{Colors.orange}baseline: {single_run_result["Average Penalty"]}{Colors.reset}')
+            print(f'{Colors.orange}baseline: {single_run_result["Average Penalty"].loc[0]}{Colors.reset}')
             
             single_run_result['BB Percentage'] = 0
             single_run_result['Cache Size'] = cache_size
@@ -93,7 +93,7 @@ def run_single_conf(fname, basic_settings, trace_name, optimal_LFU_percentage,
                     **basic_settings, 
                     **current_run_settings}
         
-        print(f'{cyan}LFU: {optimal_LFU_percentage} BC: {bb_percentage}{reset}')
+        print(f'{Colors.cyan}LFU: {optimal_LFU_percentage} BC: {bb_percentage}{Colors.reset}')
         
         single_run_result = simulatools.single_run('window_ca_burst_block', trace_files=[fname], trace_folder='latency', 
                                                     trace_format='LATENCY', size=cache_size, 
@@ -105,7 +105,7 @@ def run_single_conf(fname, basic_settings, trace_name, optimal_LFU_percentage,
             print(f'{Colors.bold}{Colors.red}Error in {fname}: exiting{Colors.reset}')
             exit(1)
         else:
-            print(f'{Colors.yellow}avg.pen: {single_run_result["Average Penalty"]}{Colors.reset}')
+            print(f'{Colors.yellow}avg.pen: {single_run_result["Average Penalty"].loc[0]}{Colors.reset}')
             
             single_run_result['Point Of Comparison'] = optimal_LFU_percentage
             single_run_result['BB Percentage'] = int(bb_percentage * 100)
