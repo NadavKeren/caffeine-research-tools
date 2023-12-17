@@ -172,11 +172,7 @@ def run_window_CA(fname: str, trace_name: str, times: str, cache_size: int) -> N
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca', 
             additional_settings={"ca-window.percent-main" : [0.9]}, name='LRU-0.1', additional_pickle_data={'LRU Percentage' : 10})
     
-    pickle_filename = f'window-CA-{trace_name}-{timefile, trace_name, times, cache_size)
-            run_adaptive_CA_BB(file, trace_name, times, cache_size)
-            run_static_CA_BB(file, trace_name, times, cache_size)
-            run_window_CA(file, trace_name, times, cache_size)
-            run_additional(file, trace_name, times, cache_size)s}-{cache_size}-0.5-LRU.pickle'
+    pickle_filename = f'window-CA-{trace_name}-{times}-{cache_size}-0.5-LRU.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca', 
             additional_settings={"ca-window.percent-main" : [0.5]}, name='LRU-0.5', additional_pickle_data={'LRU Percentage' : 50})
     
