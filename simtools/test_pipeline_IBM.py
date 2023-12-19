@@ -222,18 +222,18 @@ def run_sampled(fname: str, trace_name: str, times: str, cache_size: int) -> Non
         SAMPLE_SETTINGS = {'sampled-hill-climber.sample-order-factor' : sample_rate, 
                            'sampled-hill-climber.adaption-multiplier' : 10}
         
-        pickle_filename = f'sampled-O{sample_rate-rate}-{trace_name}-{times}-{cache_size}-LRU.pickle'
+        pickle_filename = f'sampled-O{sample_rate}-{trace_name}-{times}-{cache_size}-LRU.pickle'
         run_test(fname, trace_name, times, cache_size, pickle_filename, 'sampled_ghost', 
                 name=f'LRU-O{sample_rate}', additional_settings={**PIPELINE_LRU_START_SETTINGS, **SAMPLE_SETTINGS},
                 additional_pickle_data={'Sample Rate' : 1 / sample_rate, })
         
-        pickle_filename = f'sampled-O{sample_rate-rate}-{trace_name}-{times}-{cache_size}-LFU.pickle'
+        pickle_filename = f'sampled-O{sample_rate}-{trace_name}-{times}-{cache_size}-LFU.pickle'
         run_test(fname, trace_name, times, cache_size, pickle_filename, 'sampled_ghost', 
                 name=f'LFU-O{sample_rate}', additional_settings={**PIPELINE_LFU_START_SETTINGS, **SAMPLE_SETTINGS},
                 additional_pickle_data={'Sample Rate' : 1 / sample_rate})
         
         
-        pickle_filename = f'sampled-O{sample_rate-rate}-{trace_name}-{times}-{cache_size}-BC.pickle'
+        pickle_filename = f'sampled-O{sample_rate}-{trace_name}-{times}-{cache_size}-BC.pickle'
         run_test(fname, trace_name, times, cache_size, pickle_filename, 'sampled_ghost', 
                 name=f'BC-O{sample_rate}', additional_settings={**PIPELINE_BC_START_SETTINGS, **SAMPLE_SETTINGS},
                 additional_pickle_data={'Sample Rate' : 1 / sample_rate})
