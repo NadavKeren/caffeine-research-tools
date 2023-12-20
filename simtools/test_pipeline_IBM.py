@@ -183,9 +183,8 @@ def run_window_CA(fname: str, trace_name: str, times: str, cache_size: int) -> N
     
 def run_adaptive_CA(fname: str, trace_name: str, times: str, cache_size: int) -> None:
     pickle_filename = f'adaptive-CA-{trace_name}-{times}-{cache_size}.pickle'
-    dump_filename = f'adaptive-CA-adaptions-{trace_name}-{times}-{cache_size}.dump'
     
-    run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_ca', dump_filename)
+    run_test(fname, trace_name, times, cache_size, pickle_filename, 'adaptive_ca')
 
 
 def run_static_pipeline(fname: str, trace_name: str, times: str, cache_size: int) -> None:
