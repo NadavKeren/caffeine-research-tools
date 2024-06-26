@@ -53,7 +53,7 @@ def single_run(policy, trace:str=None, trace_files:Union[str, List[str]]=None, t
     if not os.path.exists(output_csvs_path):
         os.makedirs(output_csvs_path)
         
-    run_simulator_cmd = './gradlew simulator:run -x caffeine:compileJava -x caffeine:compileCodeGenJava'
+    run_simulator_cmd = './gradlew simulator:run -x caffeine:compileJava -x caffeine:compileCodeGenJava -PjvmArgs=-Xmx8g'
 #   run_simulator_cmd = './gradlew simulator:run' 
 
     if os.path.exists(conf_file):
