@@ -160,8 +160,8 @@ def run_test(fname: str, trace_name: str, times: str, cache_size: int, pickle_fi
                 single_run_result[key] = value
         
         single_run_result.to_pickle(f'./results/{pickle_filename}')
-        print(f'{Colors.bold}{Colors.yellow}Avg. Pen. {int(single_run_result['Average Penalty'].iloc[0])}{Colors.reset}')
-        print(f'Policy. {single_run_result['Policy'].iloc[0]}')
+        print(f"{Colors.bold}{Colors.yellow}Avg. Pen. {int(single_run_result['Average Penalty'].iloc[0])}{Colors.reset}")
+        print(f"Policy. {single_run_result['Policy'].iloc[0]}")
         
         if dump_filename is not None:
             dump_files = [f for f in listdir('/tmp') if f.endswith('.dump')]
