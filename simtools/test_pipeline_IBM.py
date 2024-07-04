@@ -207,6 +207,8 @@ def run_full_ghost(fname: str, trace_name: str, times: str, cache_size: int) -> 
     quantum_size = cache_size / PIPELINE_SETTINGS["pipeline.num-of-quanta"]
     SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
     
+    print(quantum_size)
+    
     pickle_filename = f'FGHC-{trace_name}-{times}-{cache_size}-LRU.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'full_ghost', 
                 name='LRU', additional_settings={**PIPELINE_LRU_START_SETTINGS, **SIZE_SETTINGS})
