@@ -258,8 +258,8 @@ def main():
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--trace', help='The trace name to test, Default: ALL DEFINED', type=str,  required=False)
-    parser.add_argument('--old', help='Run the previous approach (CA - TinyLFU)', type='store_true', required=False)
-    parser.add_argument('--additionals', help='Run of the additional algorithms for the comparison', type='store_true', required=False)
+    parser.add_argument('--old', help='Run the previous approach (CA - TinyLFU)', action='store_true', required=False)
+    parser.add_argument('--additionals', help='Run of the additional algorithms for the comparison', action='store_true', required=False)
     
     args = parser.parse_args()
     
