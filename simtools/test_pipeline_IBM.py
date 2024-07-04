@@ -134,7 +134,7 @@ def get_times(fname: str):
 def run_test(fname: str, trace_name: str, times: str, cache_size: int, pickle_filename : str,
              algorithm : str, dump_filename : str = None, additional_settings = None, name = None, additional_pickle_data = None) -> None:
     now = datetime.datetime.now()
-    print(f'{now.strftime("%H:%M:%S")}: {Colors.pink}Running {algorithm} on file: {fname} at pickle: {pickle_filename}{Colors.reset}')
+    print(f'{now.strftime("%H:%M:%S")}: {Colors.pink}Running {algorithm} on trace: {trace_name}, size: {cache_size}{Colors.reset}' + f' Name: {name}' if name is not None else "")
     
     if (path.isfile(f'./results/{pickle_filename}')): # * Skipping tests with existing results        
         return
@@ -160,6 +160,8 @@ def run_test(fname: str, trace_name: str, times: str, cache_size: int, pickle_fi
                 single_run_result[key] = value
         
         single_run_result.to_pickle(f'./results/{pickle_filename}')
+        print(f'{Colors.bold}{Colors.yellow}Avg. Pen. {int(single_run_result['Average Penalty'].iloc[0])}{Colors.reset}')
+        print(f'Policy. {single_run_result['Policy'].iloc[0]}')
         
         if dump_filename is not None:
             dump_files = [f for f in listdir('/tmp') if f.endswith('.dump')]
@@ -239,8 +241,8 @@ def run_sampled(fname: str, trace_name: str, times: str, cache_size: int) -> Non
     
             
 def run_additional(fname: str, trace_name: str, times: str, cache_size: int) -> None:
-    pickle_filename = f'CA-ARC-{trace_name}-{times}-{cache_size}.pickle'
-    run_test(fname, trace_name, times, cache_size, pickle_filename, 'ca_arc')
+    # pickle_filename = f'CA-ARC-{trace_name}-{times}-{cache_size}.pickle'
+    # run_test(fname, trace_name, times, cache_size, pickle_filename, 'ca_arc')
     
     pickle_filename = f'Hyperbolic-{trace_name}-{times}-{cache_size}.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'hyperbolic')
@@ -256,6 +258,8 @@ def main():
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--trace', help='The trace name to test, Default: ALL DEFINED', type=str,  required=False)
+    parser.add_argument('--old', help='Run the previous approach (CA - TinyLFU)', type='store_true', required=False)
+    parser.add_argument('--additionals', help='Run of the additional algorithms for the comparison', type='store_true', required=False)
     
     args = parser.parse_args()
     
@@ -278,12 +282,16 @@ def main():
         cache_sizes = [optimal_size // 4, optimal_size // 2, optimal_size, optimal_size * 2, optimal_size * 4]
         
         for cache_size in cache_sizes:
-            run_window_CA(file, trace_name, times, cache_size)
-            run_adaptive_CA(file, trace_name, times, cache_size)
+            if args.old:
+                run_window_CA(file, trace_name, times, cache_size)
+                run_adaptive_CA(file, trace_name, times, cache_size)
+            
             run_static_pipeline(file, trace_name, times, cache_size)
             run_full_ghost(file, trace_name, times, cache_size)
             run_sampled(file, trace_name, times, cache_size)
-            run_additional(file, trace_name, times, cache_size)
+            
+            if args.additionals:
+                run_additional(file, trace_name, times, cache_size)
             
     print(f'{Colors.bold}{Colors.green}Done\n#####################\n\n{Colors.reset}')
 
