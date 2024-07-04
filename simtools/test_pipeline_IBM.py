@@ -205,7 +205,7 @@ def run_static_pipeline(fname: str, trace_name: str, times: str, cache_size: int
         
 def run_full_ghost(fname: str, trace_name: str, times: str, cache_size: int) -> None:
     quantum_size = cache_size / PIPELINE_SETTINGS["pipeline.num-of-quanta"]
-    SIZE_SETTINGS = {'quantum-size' : quantum_size}
+    SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
     
     pickle_filename = f'FGHC-{trace_name}-{times}-{cache_size}-LRU.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'full_ghost', 
@@ -227,7 +227,7 @@ def run_sampled(fname: str, trace_name: str, times: str, cache_size: int) -> Non
         SAMPLE_SETTINGS = {'sampled-hill-climber.sample-order-factor' : sample_rate, 
                            'sampled-hill-climber.adaption-multiplier' : 10}
         
-        SIZE_SETTINGS = {'quantum-size' : quantum_size}
+        SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
         
         pickle_filename = f'sampled-O{sample_rate}-{trace_name}-{times}-{cache_size}-LRU.pickle'
         run_test(fname, trace_name, times, cache_size, pickle_filename, 'sampled_ghost', 
