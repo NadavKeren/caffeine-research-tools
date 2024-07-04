@@ -204,33 +204,39 @@ def run_static_pipeline(fname: str, trace_name: str, times: str, cache_size: int
         
         
 def run_full_ghost(fname: str, trace_name: str, times: str, cache_size: int) -> None:
+    quantum_size = cache_size / PIPELINE_SETTINGS["pipeline.num-of-quanta"]
+    SIZE_SETTINGS = {'quantum-size' : quantum_size}
+    
     pickle_filename = f'FGHC-{trace_name}-{times}-{cache_size}-LRU.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'full_ghost', 
-                name='LRU', additional_settings={**PIPELINE_LRU_START_SETTINGS})
+                name='LRU', additional_settings={**PIPELINE_LRU_START_SETTINGS, **SIZE_SETTINGS})
     
     pickle_filename = f'FGHC-{trace_name}-{times}-{cache_size}-LFU.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'full_ghost', 
-                name='LFU', additional_settings={**PIPELINE_LFU_START_SETTINGS})
+                name='LFU', additional_settings={**PIPELINE_LFU_START_SETTINGS, **SIZE_SETTINGS})
     
     
     pickle_filename = f'FGHC-{trace_name}-{times}-{cache_size}-BC.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'full_ghost', 
-                name='BC', additional_settings={**PIPELINE_BC_START_SETTINGS})
+                name='BC', additional_settings={**PIPELINE_BC_START_SETTINGS, **SIZE_SETTINGS})
         
     
 def run_sampled(fname: str, trace_name: str, times: str, cache_size: int) -> None:
+    quantum_size = cache_size / PIPELINE_SETTINGS["pipeline.num-of-quanta"]
     for sample_rate in (1, 2, 3, 4):
         SAMPLE_SETTINGS = {'sampled-hill-climber.sample-order-factor' : sample_rate, 
                            'sampled-hill-climber.adaption-multiplier' : 10}
         
+        SIZE_SETTINGS = {'quantum-size' : quantum_size}
+        
         pickle_filename = f'sampled-O{sample_rate}-{trace_name}-{times}-{cache_size}-LRU.pickle'
         run_test(fname, trace_name, times, cache_size, pickle_filename, 'sampled_ghost', 
-                name=f'LRU-O{sample_rate}', additional_settings={**PIPELINE_LRU_START_SETTINGS, **SAMPLE_SETTINGS},
+                name=f'LRU-O{sample_rate}', additional_settings={**PIPELINE_LRU_START_SETTINGS, **SAMPLE_SETTINGS, **SIZE_SETTINGS},
                 additional_pickle_data={'Sample Rate' : 1 / sample_rate})
         
         pickle_filename = f'sampled-O{sample_rate}-{trace_name}-{times}-{cache_size}-LFU.pickle'
         run_test(fname, trace_name, times, cache_size, pickle_filename, 'sampled_ghost', 
-                name=f'LFU-O{sample_rate}', additional_settings={**PIPELINE_LFU_START_SETTINGS, **SAMPLE_SETTINGS},
+                name=f'LFU-O{sample_rate}', additional_settings={**PIPELINE_LFU_START_SETTINGS, **SAMPLE_SETTINGS, **SIZE_SETTINGS},
                 additional_pickle_data={'Sample Rate' : 1 / sample_rate})
         
         
