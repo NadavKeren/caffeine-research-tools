@@ -190,17 +190,20 @@ def run_adaptive_CA(fname: str, trace_name: str, times: str, cache_size: int) ->
 
 
 def run_static_pipeline(fname: str, trace_name: str, times: str, cache_size: int) -> None:
+    quantum_size = cache_size / PIPELINE_SETTINGS["pipeline.num-of-quanta"]
+    SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
+    
     pickle_filename = f'static-pipeline-{trace_name}-{times}-{cache_size}-0.1-BC.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'pipeline', 
-            additional_settings={**PIPELINE_SMALL_BC_SETTINGS}, name='BC-0.125', additional_pickle_data={'Burst Cache Percentage' : 12.5})
+            additional_settings={**PIPELINE_SMALL_BC_SETTINGS, **SIZE_SETTINGS}, name='BC-0.125', additional_pickle_data={'Burst Cache Percentage' : 12.5})
     
     pickle_filename = f'static-pipeline-{trace_name}-{times}-{cache_size}-0.5-BC.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca_burst_block', 
-            additional_settings={**PIPELINE_MEDIUM_BC_SETTINGS}, name='BC-0.5', additional_pickle_data={'Burst Cache Percentage' : 50})
+            additional_settings={**PIPELINE_MEDIUM_BC_SETTINGS, **SIZE_SETTINGS}, name='BC-0.5', additional_pickle_data={'Burst Cache Percentage' : 50})
     
     pickle_filename = f'static-pipeline-{trace_name}-{times}-{cache_size}-0.9-BC.pickle'
     run_test(fname, trace_name, times, cache_size, pickle_filename, 'window_ca_burst_block', 
-            additional_settings={**PIPELINE_HIGH_BC_SETTINGS}, name='BC-0.875', additional_pickle_data={'Burst Cache Percentage' : 87.5})
+            additional_settings={**PIPELINE_HIGH_BC_SETTINGS, **SIZE_SETTINGS}, name='BC-0.875', additional_pickle_data={'Burst Cache Percentage' : 87.5})
         
         
 def run_full_ghost(fname: str, trace_name: str, times: str, cache_size: int) -> None:
