@@ -226,7 +226,7 @@ def run_sampled(fname: str, trace_name: str, times: str, cache_size: int) -> Non
     for sample_rate in (1, 2, 3, 4):
         SAMPLE_SETTINGS = {'sampled-hill-climber.sample-order-factor' : sample_rate, 
                            'sampled-hill-climber.adaption-multiplier' : 10}
-        
+        print(quantum_size)
         SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
         
         pickle_filename = f'sampled-O{sample_rate}-{trace_name}-{times}-{cache_size}-LRU.pickle'
