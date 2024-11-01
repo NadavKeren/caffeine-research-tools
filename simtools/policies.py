@@ -14,6 +14,7 @@ class Policy(Enum):
     pipeline = 'latency-aware.Pipeline'
     full_ghost = 'latency-aware.FGHC'
     sampled_ghost = 'latency-aware.SampledHillClimber'
+    random_climber = 'latency-aware.RHC'
     
     
     
