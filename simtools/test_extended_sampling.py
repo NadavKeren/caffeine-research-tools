@@ -42,7 +42,7 @@ PIPELINE_EQUAL_START_SETTINGS = {"pipeline.num-of-block" : 3,
 
 FULL_GHOST_SETTINGS = {'full-ghost-hill-climber.adaption-multiplier' : 10}
 
-SEED_PATH = 'caffeine.simulator.random-seed'
+SEED_PATH = 'random-seed'
 
 
 SETTINGS = {**PIPELINE_EQUAL_START_SETTINGS, **FULL_GHOST_SETTINGS}
