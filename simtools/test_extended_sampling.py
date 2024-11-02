@@ -150,6 +150,7 @@ def main():
     
     parser.add_argument('--input', help="The input trace path", required=True)
     parser.add_argument('--rounds', help="number of round to perform", required=True, type=int)
+    parser.add_argument('--round-index-start', help="The starting index for the round numbers", required=False, type=int, default=0)
     
     args = parser.parse_args()
     
@@ -169,8 +170,8 @@ def main():
     for round in tqdm.trange(args.rounds):
         seed = int.from_bytes(urandom(4), 'big')
 
-        run_sampled(file, trace_name, cache_size, round + 1, seed)
-        run_random_hill_climber(file, trace_name, cache_size, round + 1, seed)
+        run_sampled(file, trace_name, cache_size, args.round_index_start + round + 1, seed)
+        run_random_hill_climber(file, trace_name, cache_size, args.round_index_start + round + 1, seed)
     
     print(f'{Colors.bold}{Colors.green}Done\n#####################\n\n{Colors.reset}')
 
