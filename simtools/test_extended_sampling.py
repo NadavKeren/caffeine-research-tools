@@ -1,7 +1,7 @@
 import argparse
 import simulatools
 import pprint
-import pickle
+import csv
 import re
 from os import path, listdir, makedirs, urandom
 from shutil import move
@@ -15,9 +15,9 @@ caffeine_root = local_conf['caffeine_root']
 resources = local_conf['resources'] if local_conf['resources'] != '' else caffeine_root
 TRACES_DIR = f'{resources}'
 
-SIZES = {'trace010' : 2 ** 10, 'trace024' : 2 ** 9, 'trace031' : 2 ** 16,
-         'trace045' : 2 ** 12, 'trace034' : 2 ** 14, 'trace029' : 2 ** 9,
-         'trace012' : 2 ** 10}
+# SIZES = {'trace010' : 2 ** 10, 'trace024' : 2 ** 9, 'trace031' : 2 ** 16,
+#          'trace045' : 2 ** 12, 'trace034' : 2 ** 14, 'trace029' : 2 ** 9,
+#          'trace012' : 2 ** 10}
 
 
 PIPELINE_EQUAL_START_SETTINGS = {"pipeline.num-of-block" : 3, 
@@ -39,6 +39,31 @@ PIPELINE_EQUAL_START_SETTINGS = {"pipeline.num-of-block" : 3,
                                 "pipeline.blocks.2.type": "BC",
                                 "pipeline.blocks.2.quota": 5}
 
+PIPELINE_LRU_ONLY = {"pipeline.num-of-block" : 1, 
+                     "pipeline.num-of-quanta" : 16,
+                     "pipeline.blocks.0.type": "LRU",
+                     "pipeline.blocks.0.quota": 16, 
+                     "pipeline.blocks.0.decay-factor" : 1, 
+                     "pipeline.blocks.0.max-lists" : 10}
+
+PIPELINE_LFU_ONLY = {"pipeline.num-of-block" : 1, 
+                     "pipeline.num-of-quanta" : 16,
+                     "pipeline.blocks.0.type": "LFU",
+                     "pipeline.blocks.0.quota": 16, 
+                     "pipeline.blocks.0.decay-factor" : 1, 
+                     "pipeline.blocks.0.max-lists" : 10}
+
+
+PIPELINE_BC_ONLY = {"pipeline.num-of-block" : 1, 
+                    "pipeline.num-of-quanta" : 16,
+                    "pipeline.blocks.0.type": "BC",
+                    "pipeline.blocks.0.quota": 16, 
+                    "pipeline.burst.aging-window-size" : 50, 
+                    "pipeline.burst.age-smoothing" : 0.0025, 
+                    "pipeline.burst.number-of-partitions" : 4, 
+                    "pipeline.burst.type" : "sketch", 
+                    "pipeline.burst.sketch.eps" : 0.0001, 
+                    "pipeline.burst.sketch.confidence" : 0.99}
 
 FULL_GHOST_SETTINGS = {'full-ghost-hill-climber.adaption-multiplier' : 10}
 
@@ -74,12 +99,13 @@ def get_trace_name(fname: str):
     return name[0]
 
 
-def run_test(fname: str, trace_name: str, cache_size: int, pickle_filename : str,
-             algorithm : str, dump_filename : str = None, additional_settings = None, name = None, additional_pickle_data = None) -> None:
+def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str,
+             algorithm : str, should_keep_dump : bool = True, additional_settings = None,
+             name = None, additional_csv_data = None) -> None:
     now = datetime.datetime.now()
     print(f'{now.strftime("%H:%M:%S")}: {Colors.pink}Running {algorithm} on trace: {trace_name}, size: {cache_size}{Colors.reset}' + f' Name: {name}' if name is not None else "")
     
-    if (path.isfile(f'./results/{pickle_filename}')): # * Skipping tests with existing results        
+    if (path.isfile(f'./results/{output_filename}.csv')): # * Skipping tests with existing results        
         return
     
     settings = SETTINGS if additional_settings is None else {**SETTINGS, **additional_settings}
@@ -97,26 +123,25 @@ def run_test(fname: str, trace_name: str, cache_size: int, pickle_filename : str
         single_run_result['Cache Size'] = cache_size
         single_run_result['Trace'] = trace_name
         
-        if additional_pickle_data is not None:
-            for key, value in additional_pickle_data.items():
+        if additional_csv_data is not None:
+            for key, value in additional_csv_data.items():
                 single_run_result[key] = value
         
-        single_run_result.to_pickle(f'./results/{pickle_filename}')
+        single_run_result.to_csv(f'./results/{output_filename}.csv')
         print(f"{Colors.bold}{Colors.yellow}Avg. Pen. {int(single_run_result['Average Penalty'].iloc[0])}{Colors.reset}")
         print(f"Policy. {single_run_result['Policy'].iloc[0]}")
         
-        if dump_filename is not None:
-            dump_files = [f for f in listdir('/tmp') if f.endswith('.dump')]
-            assert len(dump_files) == 1
-            move(f'/tmp/{dump_files[0]}', f'./results/{dump_filename}')
-        
+        if should_keep_dump:
+            quota_files = [f for f in listdir('/tmp') if f.endswith('.quota-allocation')]
+            assert len(quota_files) == 1
+            move(f'/tmp/{quota_files[0]}', f'./results/{output_filename}.quota-allocation')
         
 def run_full_ghost(fname: str, trace_name: str, cache_size: int) -> None:
     quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
     SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
     
-    pickle_filename = f'FGHC-{trace_name}-extended-{cache_size}.pickle'
-    run_test(fname, trace_name, cache_size, pickle_filename, 'full_ghost', 
+    csv_filename = f'FGHC-{trace_name}-extended-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'full_ghost', 
                 name='FGHC', additional_settings={**SETTINGS, **SIZE_SETTINGS})
 
 
@@ -129,20 +154,37 @@ def run_sampled(fname: str, trace_name: str, cache_size: int, round: int, seed: 
             
             SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
             
-            pickle_filename = f'sampled-O{sample_rate}-{trace_name}-extended-{cache_size}-R{round}.pickle'
-            run_test(fname, trace_name, cache_size, pickle_filename, 'sampled_ghost', 
+            csv_filename = f'sampled-O{sample_rate}-{trace_name}-extended-{cache_size}-R{round}'
+            run_test(fname, trace_name, cache_size, csv_filename, 'sampled_ghost', 
                     name=f'extended-O{sample_rate}', additional_settings={**SETTINGS, **SAMPLE_SETTINGS, **SIZE_SETTINGS, SEED_PATH: seed},
-                    additional_pickle_data={'Round' : round, 'Seed': seed})
+                    additional_csv_data={'Round' : round, 'Seed': seed})
 
 
 def run_random_hill_climber(fname: str, trace_name: str, cache_size: int, round: int, seed: int) -> None:
     quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
     SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
 
-    pickle_filename = f'RHC-{trace_name}-extended-{cache_size}.pickle'
-    run_test(fname, trace_name, cache_size, pickle_filename, 'random_climber', 
+    csv_filename = f'RHC-{trace_name}-extended-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'random_climber', 
             name=f'RHC', additional_settings={**SETTINGS, **SIZE_SETTINGS, SEED_PATH: seed}, 
-            additional_pickle_data={'Round' : round, 'Seed': seed})
+            additional_csv_data={'Round' : round, 'Seed': seed})
+    
+
+def run_all_simple(fname: str, trace_name: str, cache_size: int) -> None:
+    quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
+    SIZE_SETTINGS = {'pipeline.quantum-size': quantum_size}
+    
+    csv_filename = f'LRU-{trace_name}-extended-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
+            name=f'LRU', additional_settings={**PIPELINE_LRU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
+
+    csv_filename = f'LFU-{trace_name}-extended-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
+            name=f'LFU', additional_settings={**PIPELINE_LFU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
+    
+    csv_filename = f'BC-{trace_name}-extended-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
+            name=f'BC', additional_settings={**PIPELINE_BC_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
 
 
 def main():
@@ -162,10 +204,13 @@ def main():
 
     print(f'{Colors.lightblue}Testing file: {file}{Colors.reset}')
 
-    trace_name = get_trace_name(file)
-    cache_size = SIZES.get(trace_name) * 10
+    # trace_name = get_trace_name(file)
+    # cache_size = SIZES.get(trace_name) * 10
+    trace_name = "trace024-010-024"
+    cache_size = 5120
     
     run_full_ghost(file, trace_name, cache_size)
+    run_all_simple(file, trace_name, cache_size)
 
     for round in tqdm.trange(args.rounds):
         seed = int.from_bytes(urandom(4), 'big')
