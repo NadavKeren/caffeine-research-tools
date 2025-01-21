@@ -1,19 +1,29 @@
 import argparse
 import simulatools
-import pprint
-import csv
 import re
-from os import path, listdir, makedirs, urandom
-from shutil import move
-import datetime
+from os import urandom
+from pathlib import Path
 import json
-import tqdm
+from tqdm.rich import trange
 
-with open(path.join(path.dirname(__file__), 'conf.json')) as conf_file:
+from rich import pretty
+from rich.console import Console
+
+filepath = Path(__file__) 
+current_dir = filepath.parent
+filepath = current_dir.resolve()
+result_dir = current_dir / 'results'
+result_dir.mkdir(exist_ok=True)
+
+with open(current_dir / 'conf.json') as conf_file:
     local_conf = json.load(conf_file)
 caffeine_root = local_conf['caffeine_root']
 resources = local_conf['resources'] if local_conf['resources'] != '' else caffeine_root
 TRACES_DIR = f'{resources}'
+
+
+pretty.install()
+console = Console()
 
 # SIZES = {'trace010' : 2 ** 10, 'trace024' : 2 ** 9, 'trace031' : 2 ** 16,
 #          'trace045' : 2 ** 12, 'trace034' : 2 ** 14, 'trace029' : 2 ** 9,
@@ -102,10 +112,9 @@ def get_trace_name(fname: str):
 def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str,
              algorithm : str, should_keep_dump : bool = True, additional_settings = None,
              name = None, additional_csv_data = None) -> None:
-    now = datetime.datetime.now()
-    print(f'{now.strftime("%H:%M:%S")}: {Colors.pink}Running {algorithm} on trace: {trace_name}, size: {cache_size}{Colors.reset}' + f' Name: {name}' if name is not None else "")
+    console.log(f'[bold #a98467]Running {algorithm} on trace: {trace_name}, size: {cache_size}' + f' Name: {name}' if name is not None else "")
     
-    if (path.isfile(f'./results/{output_filename}.csv')): # * Skipping tests with existing results        
+    if (Path(f'./results/{output_filename}.csv').exists()): # * Skipping tests with existing results        
         return
     
     settings = SETTINGS if additional_settings is None else {**SETTINGS, **additional_settings}
@@ -117,7 +126,7 @@ def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str
                                                 save = False, verbose = False)
     
     if (single_run_result is False):
-        print(f'{Colors.bold}{Colors.red}Error in {fname}: exiting{Colors.reset}')
+        console.log(f'[bold red]Error in {fname}: exiting')
         exit(1)
     else:                    
         single_run_result['Cache Size'] = cache_size
@@ -128,14 +137,16 @@ def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str
                 single_run_result[key] = value
         
         single_run_result.to_csv(f'./results/{output_filename}.csv')
-        print(f"{Colors.bold}{Colors.yellow}Avg. Pen. {int(single_run_result['Average Penalty'].iloc[0])}{Colors.reset}")
-        print(f"Policy. {single_run_result['Policy'].iloc[0]}")
+        console.log(f"[bold #ffd166]Avg. Pen. {int(single_run_result['Average Penalty'].iloc[0])}")
         
         if should_keep_dump:
-            quota_files = [f for f in listdir('/tmp') if f.endswith('.quota-allocation')]
+            dump_path = Path(f'{caffeine_root}/simulator')
+            quota_files = dump_path.rglob('*.quota-dump')
             assert len(quota_files) == 1
-            move(f'/tmp/{quota_files[0]}', f'./results/{output_filename}.quota-allocation')
-        
+            dumpfile = dump_path / f'{quota_files[0]}'
+            dumpfile.rename(result_dir / f'{output_filename}.quota-dump')
+
+
 def run_full_ghost(fname: str, trace_name: str, cache_size: int) -> None:
     quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
     SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
@@ -166,7 +177,7 @@ def run_random_hill_climber(fname: str, trace_name: str, cache_size: int, round:
 
     csv_filename = f'RHC-{trace_name}-extended-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'random_climber', 
-            name=f'RHC', additional_settings={**SETTINGS, **SIZE_SETTINGS, SEED_PATH: seed}, 
+            name='RHC', additional_settings={**SETTINGS, **SIZE_SETTINGS, SEED_PATH: seed}, 
             additional_csv_data={'Round' : round, 'Seed': seed})
     
 
@@ -176,15 +187,15 @@ def run_all_simple(fname: str, trace_name: str, cache_size: int) -> None:
     
     csv_filename = f'LRU-{trace_name}-extended-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
-            name=f'LRU', additional_settings={**PIPELINE_LRU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
+            name='LRU', additional_settings={**PIPELINE_LRU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
 
     csv_filename = f'LFU-{trace_name}-extended-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
-            name=f'LFU', additional_settings={**PIPELINE_LFU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
+            name='LFU', additional_settings={**PIPELINE_LFU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
     
     csv_filename = f'BC-{trace_name}-extended-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
-            name=f'BC', additional_settings={**PIPELINE_BC_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
+            name='BC', additional_settings={**PIPELINE_BC_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
 
 
 def main():
@@ -196,29 +207,29 @@ def main():
     
     args = parser.parse_args()
     
-    print(f'{Colors.pink}Running with args:\n{pprint.pformat(args)}{Colors.reset}')
-        
-    makedirs('./results', exist_ok=True)
+    console.print(f'[bold]Running with args:[/bold]\n{args}')
     
     file = args.input
 
-    print(f'{Colors.lightblue}Testing file: {file}{Colors.reset}')
+    console.print(f'Testing file: {file}')
 
     # trace_name = get_trace_name(file)
     # cache_size = SIZES.get(trace_name) * 10
     trace_name = "trace024-010-024"
     cache_size = 5120
-    
-    run_full_ghost(file, trace_name, cache_size)
-    run_all_simple(file, trace_name, cache_size)
 
-    for round in tqdm.trange(args.rounds):
-        seed = int.from_bytes(urandom(4), 'big')
-
-        run_sampled(file, trace_name, cache_size, args.round_index_start + round + 1, seed)
-        run_random_hill_climber(file, trace_name, cache_size, args.round_index_start + round + 1, seed)
     
-    print(f'{Colors.bold}{Colors.green}Done\n#####################\n\n{Colors.reset}')
+    with console.status("[cyan]Running tests...") as status:
+        run_full_ghost(file, trace_name, cache_size)
+        run_all_simple(file, trace_name, cache_size)
+    
+        for round in trange(args.rounds):
+            seed = int.from_bytes(urandom(4), 'big')
+
+            run_sampled(file, trace_name, cache_size, args.round_index_start + round + 1, seed)
+            run_random_hill_climber(file, trace_name, cache_size, args.round_index_start + round + 1, seed)
+    
+    Console.log('Done\n#####################\n\n', style="bold #a3b18a")
 
 if __name__ == "__main__":
     main()
