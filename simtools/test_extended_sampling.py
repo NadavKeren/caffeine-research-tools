@@ -4,10 +4,10 @@ import re
 from os import urandom
 from pathlib import Path
 import json
-from tqdm.rich import trange
 
-from rich import pretty
+from rich import pretty, print
 from rich.console import Console
+from rich.progress import Progress
 
 filepath = Path(__file__) 
 current_dir = filepath.parent
@@ -25,38 +25,55 @@ TRACES_DIR = f'{resources}'
 pretty.install()
 console = Console()
 
+NUM_OF_QUANTA = 16
+
 # SIZES = {'trace010' : 2 ** 10, 'trace024' : 2 ** 9, 'trace031' : 2 ** 16,
 #          'trace045' : 2 ** 12, 'trace034' : 2 ** 14, 'trace029' : 2 ** 9,
 #          'trace012' : 2 ** 10}
 
+PIPELINE_SETTINGS_WITHOUT_QUOTA = {"pipeline.num-of-blocks" : 3,
+                                   "pipeline.blocks.0.type": "LRU",
+                                   "pipeline.blocks.0.decay-factor" : 1, 
+                                   "pipeline.blocks.0.max-lists" : 10,
+                                   "pipeline.blocks.1.type": "LFU",
+                                   "pipeline.blocks.1.decay-factor" : 1, 
+                                   "pipeline.blocks.1.max-lists" : 10,
+                                   "pipeline.blocks.2.type": "BC",
+                                   "pipeline.burst.aging-window-size" : 50, 
+                                   "pipeline.burst.age-smoothing" : 0.0025, 
+                                   "pipeline.burst.number-of-partitions" : 4, 
+                                   "pipeline.burst.type" : "sketch", 
+                                   "pipeline.burst.sketch.eps" : 0.0001, 
+                                   "pipeline.burst.sketch.confidence" : 0.99}
 
-PIPELINE_EQUAL_START_SETTINGS = {"pipeline.num-of-block" : 3, 
-                                "pipeline.num-of-quanta" : 16,
-                                "pipeline.burst.aging-window-size" : 50, 
-                                "pipeline.burst.age-smoothing" : 0.0025, 
-                                "pipeline.burst.number-of-partitions" : 4, 
-                                "pipeline.burst.type" : "sketch", 
-                                "pipeline.burst.sketch.eps" : 0.0001, 
-                                "pipeline.burst.sketch.confidence" : 0.99,
-                                "pipeline.blocks.0.type": "LRU",
-                                "pipeline.blocks.0.quota": 5, 
-                                "pipeline.blocks.0.decay-factor" : 1, 
-                                "pipeline.blocks.0.max-lists" : 10,
-                                "pipeline.blocks.1.type": "LFU",
-                                "pipeline.blocks.1.quota": 6, 
-                                "pipeline.blocks.1.decay-factor" : 1, 
-                                "pipeline.blocks.1.max-lists" : 10,
-                                "pipeline.blocks.2.type": "BC",
-                                "pipeline.blocks.2.quota": 5}
+PIPELINE_EQUAL_START_SETTINGS = {**PIPELINE_SETTINGS_WITHOUT_QUOTA,
+                                 "pipeline.blocks.0.quota": 5, 
+                                 "pipeline.blocks.1.quota": 6, 
+                                 "pipeline.blocks.2.quota": 5}
 
-PIPELINE_LRU_ONLY = {"pipeline.num-of-block" : 1, 
+PIPELINE_LRU_START_SETTINGS = {**PIPELINE_SETTINGS_WITHOUT_QUOTA,
+                               "pipeline.blocks.0.quota": 14, 
+                               "pipeline.blocks.1.quota": 1,
+                               "pipeline.blocks.2.quota": 1}
+
+PIPELINE_SETTINGS_WITHOUT_BURST = {"pipeline.num-of-blocks" : 2,
+                                   "pipeline.blocks.0.type": "LRU",
+                                   "pipeline.blocks.0.decay-factor" : 1, 
+                                   "pipeline.blocks.0.max-lists" : 10,
+                                   "pipeline.blocks.0.quota": 8, 
+                                   "pipeline.blocks.1.type": "LFU",
+                                   "pipeline.blocks.1.decay-factor" : 1, 
+                                   "pipeline.blocks.1.max-lists" : 10,
+                                   "pipeline.blocks.1.quota": 8}
+
+PIPELINE_LRU_ONLY = {"pipeline.num-of-blocks" : 1, 
                      "pipeline.num-of-quanta" : 16,
                      "pipeline.blocks.0.type": "LRU",
                      "pipeline.blocks.0.quota": 16, 
                      "pipeline.blocks.0.decay-factor" : 1, 
                      "pipeline.blocks.0.max-lists" : 10}
 
-PIPELINE_LFU_ONLY = {"pipeline.num-of-block" : 1, 
+PIPELINE_LFU_ONLY = {"pipeline.num-of-blocks" : 1, 
                      "pipeline.num-of-quanta" : 16,
                      "pipeline.blocks.0.type": "LFU",
                      "pipeline.blocks.0.quota": 16, 
@@ -64,7 +81,7 @@ PIPELINE_LFU_ONLY = {"pipeline.num-of-block" : 1,
                      "pipeline.blocks.0.max-lists" : 10}
 
 
-PIPELINE_BC_ONLY = {"pipeline.num-of-block" : 1, 
+PIPELINE_BC_ONLY = {"pipeline.num-of-blocks" : 1, 
                     "pipeline.num-of-quanta" : 16,
                     "pipeline.blocks.0.type": "BC",
                     "pipeline.blocks.0.quota": 16, 
@@ -75,12 +92,17 @@ PIPELINE_BC_ONLY = {"pipeline.num-of-block" : 1,
                     "pipeline.burst.sketch.eps" : 0.0001, 
                     "pipeline.burst.sketch.confidence" : 0.99}
 
-FULL_GHOST_SETTINGS = {'full-ghost-hill-climber.adaption-multiplier' : 10}
-
 SEED_PATH = 'random-seed'
 
 
-SETTINGS = {**PIPELINE_EQUAL_START_SETTINGS, **FULL_GHOST_SETTINGS}
+SETTINGS = {"pipeline.num-of-quanta" : NUM_OF_QUANTA,
+            "pipeline.burst.aging-window-size" : 50, 
+            "pipeline.burst.age-smoothing" : 0.0025, 
+            "pipeline.burst.number-of-partitions" : 4, 
+            "pipeline.burst.type" : "sketch", 
+            "pipeline.burst.sketch.eps" : 0.0001, 
+            "pipeline.burst.sketch.confidence" : 0.99,
+            'full-ghost-hill-climber.adaption-multiplier' : 10}
 
 class Colors():
     reset='\033[0m'
@@ -111,8 +133,12 @@ def get_trace_name(fname: str):
 
 def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str,
              algorithm : str, should_keep_dump : bool = True, additional_settings = None,
-             name = None, additional_csv_data = None) -> None:
-    console.log(f'[bold #a98467]Running {algorithm} on trace: {trace_name}, size: {cache_size}' + f' Name: {name}' if name is not None else "")
+             name = None, additional_csv_data = None,
+             progress_console = None) -> None:
+    if progress_console:
+        progress_console.log(f'[bold #a98467]Running {algorithm} on trace: {trace_name}, size: {cache_size}' + f' Name: {name}' if name is not None else "")
+    else:
+        console.log(f'[bold #a98467]Running {algorithm} on trace: {trace_name}, size: {cache_size}' + f' Name: {name}' if name is not None else "")
     
     if (Path(f'./results/{output_filename}.csv').exists()): # * Skipping tests with existing results        
         return
@@ -126,7 +152,11 @@ def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str
                                                 save = False, verbose = False)
     
     if (single_run_result is False):
-        console.log(f'[bold red]Error in {fname}: exiting')
+        if progress_console:
+            progress_console.log(f'[bold red]Error in {fname}: exiting')
+        else:
+            console.log(f'[bold red]Error in {fname}: exiting')
+        
         exit(1)
     else:                    
         single_run_result['Cache Size'] = cache_size
@@ -137,13 +167,23 @@ def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str
                 single_run_result[key] = value
         
         single_run_result.to_csv(f'./results/{output_filename}.csv')
-        console.log(f"[bold #ffd166]Avg. Pen. {int(single_run_result['Average Penalty'].iloc[0])}")
+        if progress_console:
+            progress_console.log(f"[bold #ffd166]Avg. Pen. {int(single_run_result['Average Penalty'].iloc[0])}")
+        else:
+            console.log(f"[bold #ffd166]Avg. Pen. {int(single_run_result['Average Penalty'].iloc[0])}")
         
         if should_keep_dump:
-            dump_path = Path(f'{caffeine_root}/simulator')
-            quota_files = dump_path.rglob('*.quota-dump')
-            assert len(quota_files) == 1
-            dumpfile = dump_path / f'{quota_files[0]}'
+            dump_path = Path(f'{caffeine_root}')
+            quota_files = [file.resolve() for file in dump_path.rglob('*.quota-dump')]
+            if not len(quota_files) == 1:
+                if progress_console:
+                    progress_console.log(f"[bold red]Wrong number of dump-files found: {len(quota_files)}")
+                else:
+                    console.print(f"[bold red]Wrong number of dump-files found: {len(quota_files)}")
+                    
+                raise AssertionError()
+            
+            dumpfile = quota_files[0]
             dumpfile.rename(result_dir / f'{output_filename}.quota-dump')
 
 
@@ -153,11 +193,19 @@ def run_full_ghost(fname: str, trace_name: str, cache_size: int) -> None:
     
     csv_filename = f'FGHC-{trace_name}-extended-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'full_ghost', 
-                name='FGHC', additional_settings={**SETTINGS, **SIZE_SETTINGS})
+                name='FGHC', additional_settings={**PIPELINE_LRU_START_SETTINGS, 
+                                                  **SIZE_SETTINGS})
+    
+    csv_filename = f'FGHC-RF-{trace_name}-extended-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'full_ghost', 
+                name='FGHC-RF', additional_settings={**PIPELINE_SETTINGS_WITHOUT_BURST, 
+                                                     **SIZE_SETTINGS})
 
 
-def run_sampled(fname: str, trace_name: str, cache_size: int, round: int, seed: int) -> None:
+def run_sampled(fname: str, trace_name: str, cache_size: int, round: int, seed: int, progress: Progress) -> None:
     quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
+
+    sample_progress = progress.add_task('[bold #bedcfe]Current round', total=6, start=True)
     for sample_rate in range(1, 7):
         if (int(quantum_size) >> sample_rate > 0):
             SAMPLE_SETTINGS = {'sampled-hill-climber.sample-order-factor' : sample_rate, 
@@ -167,18 +215,23 @@ def run_sampled(fname: str, trace_name: str, cache_size: int, round: int, seed: 
             
             csv_filename = f'sampled-O{sample_rate}-{trace_name}-extended-{cache_size}-R{round}'
             run_test(fname, trace_name, cache_size, csv_filename, 'sampled_ghost', 
-                    name=f'extended-O{sample_rate}', additional_settings={**SETTINGS, **SAMPLE_SETTINGS, **SIZE_SETTINGS, SEED_PATH: seed},
-                    additional_csv_data={'Round' : round, 'Seed': seed})
+                    name=f'extended-O{sample_rate}', additional_settings={**PIPELINE_LRU_START_SETTINGS, 
+                                                                        **SAMPLE_SETTINGS, 
+                                                                        **SIZE_SETTINGS, 
+                                                                        SEED_PATH: seed},
+                    additional_csv_data={'Round' : round, 'Seed': seed}, console=progress.console)
+        progress.update(sample_progress, advance=1)
+    progress.remove_task(sample_progress)
 
 
-def run_random_hill_climber(fname: str, trace_name: str, cache_size: int, round: int, seed: int) -> None:
+def run_random_hill_climber(fname: str, trace_name: str, cache_size: int, round: int, seed: int, progress: Progress) -> None:
     quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
     SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
 
     csv_filename = f'RHC-{trace_name}-extended-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'random_climber', 
-            name='RHC', additional_settings={**SETTINGS, **SIZE_SETTINGS, SEED_PATH: seed}, 
-            additional_csv_data={'Round' : round, 'Seed': seed})
+            name='RHC', additional_settings={**PIPELINE_LRU_START_SETTINGS, **SIZE_SETTINGS, SEED_PATH: seed}, 
+            additional_csv_data={'Round' : round, 'Seed': seed}, console=progress.console)
     
 
 def run_all_simple(fname: str, trace_name: str, cache_size: int) -> None:
@@ -197,13 +250,45 @@ def run_all_simple(fname: str, trace_name: str, cache_size: int) -> None:
     run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
             name='BC', additional_settings={**PIPELINE_BC_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
 
+def run_grid_search(fname: str, trace_name: str, cache_size: int) -> None:
+    with Progress() as progress:
+        lru_progress = progress.add_task('[bold #adc178]LRU quota', total=16, start=True)
+        lfu_progress = progress.add_task('[bold #bedcfe]LFU quota', total=16, start=True)
+        for lru_size in range(NUM_OF_QUANTA + 1):
+            for lfu_size in range(NUM_OF_QUANTA - lru_size + 1):
+                bc_size = NUM_OF_QUANTA - (lru_size + lfu_size)
+                csv_filename = f'static-{lru_size}-{lfu_size}-{bc_size}-extended-{cache_size}'
+                run_test(fname, trace_name, cache_size, csv_filename, 'pipeline',
+                         name=f"{lru_size}-{lfu_size}-{bc_size}", 
+                         additional_settings={**PIPELINE_SETTINGS_WITHOUT_QUOTA,
+                                              "pipeline.blocks.0.quota": lru_size, 
+                                              "pipeline.blocks.1.quota": lfu_size,
+                                              "pipeline.blocks.2.quota": bc_size},
+                         should_keep_dump=False,
+                         additional_csv_data={'LRU Size': lru_size, 'LFU Size': lfu_size, 'BC Size': bc_size},
+                         console=progress.console)
+                progress.update(lfu_progress, advance=1)
+            
+            progress.update(lru_progress, advance=1)
+            progress.reset(lfu_progress, total=(NUM_OF_QUANTA - lru_size - 1))
 
+
+def run_adaptive_CA(fname: str, trace_name: str, cache_size: int, round: int, progress: Progress) -> None:
+    csv_filename = f'ACA-{trace_name}-extended-{cache_size}-R{round}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'adaptive_ca',
+             should_keep_dump=False, console=progress.console)
+    
+    
 def main():
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--input', help="The input trace path", required=True)
-    parser.add_argument('--rounds', help="number of round to perform", required=True, type=int)
+    parser.add_argument('--rounds', help="number of round to perform", required=False, type=int)
     parser.add_argument('--round-index-start', help="The starting index for the round numbers", required=False, type=int, default=0)
+    parser.add_argument('--run-shc', help="Run rounds of Sample Hill Climber", action='store_true', required=False)
+    parser.add_argument('--run-aca', help="Run rounds of the Adaptive Cost-Aware Window-TinyLFU", action='store_true', required=False)
+    parser.add_argument('--run-base', help="Run the baseline test of FGHC", action='store_true', required=False)
+    parser.add_argument('--run-grid-search', help="Run grid search for finding the optimal static configuration", action='store_true', required=False)
     
     args = parser.parse_args()
     
@@ -219,17 +304,33 @@ def main():
     cache_size = 5120
 
     
-    with console.status("[cyan]Running tests...") as status:
+    if args.run_base:
         run_full_ghost(file, trace_name, cache_size)
         run_all_simple(file, trace_name, cache_size)
-    
-        for round in trange(args.rounds):
-            seed = int.from_bytes(urandom(4), 'big')
 
-            run_sampled(file, trace_name, cache_size, args.round_index_start + round + 1, seed)
-            run_random_hill_climber(file, trace_name, cache_size, args.round_index_start + round + 1, seed)
+    if args.rounds is not None:
+        with Progress() as progress:
+            round_progress = progress.add_task('[bold #adc178]Rounds', total=args.rounds, start=True)
+            for round in range(args.rounds):
+                if args.run_shc:
+                    seed = abs(int.from_bytes(urandom(4), 'big', signed=True))
+                    progress.console.log(f"Starting round {round + 1} of {args.rounds}: {100.0 * round / args.rounds}%, seed: {seed}", style='bold #adc178')
+
+                    run_sampled(file, trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress)
+                
+                if args.run_aca:
+                    run_adaptive_CA(file, trace_name, cache_size, args.round_index_start + round + 1, progress=progress)
+                
+                progress.update(round_progress, advance=1)
+                # run_random_hill_climber(file, trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress)
+            
+    if args.run_grid_search:
+        run_grid_search(file, trace_name, cache_size)
+                
+
+            
     
-    Console.log('Done\n#####################\n\n', style="bold #a3b18a")
+    console.log(f"[bold #a3b18a]Done\n#####################\n\n")
 
 if __name__ == "__main__":
     main()
