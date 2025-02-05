@@ -2,8 +2,11 @@ import numpy as np
 
 import argparse
 import datetime
-import tqdm
 import re
+
+from rich import pretty, print
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 from os.path import *
 from os import path, listdir, makedirs
@@ -17,8 +20,8 @@ from utils import *
 from latency_generators import *
 
 
-def addDelayAndWriteToFile(input_path: str, output_path: str, fnames: List[str], key_base: int, time_generators: List, cluster_dists: List[float], 
-                           verbose: bool, compress: bool, gen_timestamps: bool, hit_penalty=0, set_name: str = None, seed: int = None):
+def addDelayAndWriteToFile(input_path: str, output_path: str, fname: str, key_base: int, time_generators: List, cluster_dists: List[float], 
+                           progress: Progress, verbose: bool, compress: bool, gen_timestamps: bool, hit_penalty=0, set_name: str = None, seed: int = None):
     if seed is not None:
         np.random.seed(seed)
     
@@ -39,59 +42,58 @@ def addDelayAndWriteToFile(input_path: str, output_path: str, fnames: List[str],
             output_file_name = f'{output_path}/{fnames[0]}_{current_time.strftime("%H%M%S_%d%m%Y")}'
     
     with open(f'{output_file_name}.trace', 'w') as outputFile:
-        for fname, _ in zip(fnames, tqdm.tqdm(range(len(fnames)), colour='yellow', leave=False)):
-            with open(f'{input_path}/{fname}') as inputFile:
-                BATCH_SIZE = 10000
+        with open(f'{input_path}/{fname}') as inputFile:
+            BATCH_SIZE = 10000
+            lines = [line for line in islice(inputFile, 0, BATCH_SIZE)]
+            num_of_lines += len(lines)
+            
+            while (lines):
+                current_file_latencies = np.zeros(len(lines))
+                
+                for idx in range(len(lines)):
+                    line = lines[idx]
+                    splitted = line.split(' ')
+                    key = splitted[0] if gen_timestamps else splitted[1]
+                    key = int(key.strip(' \n'), key_base)
+                    
+                    current_key_info : KeyInfo = keysTimeDistDict.get(key)
+                    
+                    if not current_key_info is None:
+                        dist_gen = current_key_info.dist_gen
+                        current_key_info.occurences += 1
+                    else:
+                        chosen_cluster = np.random.choice(range(len(time_generators)), p=cluster_dists)
+                        dist_gen = time_generators[chosen_cluster]
+                        keysTimeDistDict[key] = KeyInfo(dist_gen)
+                    
+                    """
+                    Here, using the fields instead of functions in order to reduce the call time.
+                    Moreover, the usage of batches lowers the computation time by 90%!
+                    """
+                    delay, mean = dist_gen.gen_values[dist_gen.index], dist_gen.mean
+                    dist_gen.index += 1
+                    
+                    if dist_gen.index >= RANDOM_BATCH_SIZE:
+                        dist_gen.refill_values()
+                    
+                    current_file_latencies[idx] = delay
+                    
+                    if (gen_timestamps):
+                        outputFile.write(f'{timestamp} {key} {hit_penalty} {delay}\n')
+                        timestamp += 1
+                    else:
+                        timestamp = splitted[0]
+                        outputFile.write(f'{timestamp} {key} {hit_penalty} {delay}\n')
+                
+                latency_values = np.concatenate((latency_values, current_file_latencies))
+                
                 lines = [line for line in islice(inputFile, 0, BATCH_SIZE)]
                 num_of_lines += len(lines)
-                
-                while (lines):
-                    current_file_latencies = np.zeros(len(lines))
-                    
-                    for idx in range(len(lines)):
-                        line = lines[idx]
-                        splitted = line.split(' ')
-                        key = splitted[0] if gen_timestamps else splitted[1]
-                        key = int(key.strip(' \n'), key_base)
-                        
-                        current_key_info : KeyInfo = keysTimeDistDict.get(key)
-                        
-                        if not current_key_info is None:
-                            dist_gen = current_key_info.dist_gen
-                            current_key_info.occurences += 1
-                        else:
-                            chosen_cluster = np.random.choice(range(len(time_generators)), p=cluster_dists)
-                            dist_gen = time_generators[chosen_cluster]
-                            keysTimeDistDict[key] = KeyInfo(dist_gen)
-                        
-                        """
-                        Here, using the fields instead of functions in order to reduce the call time.
-                        Moreover, the usage of batches lowers the computation time by 90%!
-                        """
-                        delay, mean = dist_gen.gen_values[dist_gen.index], dist_gen.mean
-                        dist_gen.index += 1
-                        
-                        if dist_gen.index >= RANDOM_BATCH_SIZE:
-                            dist_gen.refill_values()
-                        
-                        current_file_latencies[idx] = delay
-                        
-                        if (gen_timestamps):
-                            outputFile.write(f'{timestamp} {key} {hit_penalty} {delay}\n')
-                            timestamp += 1
-                        else:
-                            timestamp = splitted[0]
-                            outputFile.write(f'{timestamp} {key} {hit_penalty} {delay}\n')
-                    
-                    latency_values = np.concatenate((latency_values, current_file_latencies))
-                    
-                    lines = [line for line in islice(inputFile, 0, BATCH_SIZE)]
-                    num_of_lines += len(lines)
-                
-                if (verbose):
-                    print(f'{Colors.orange}Added latencies to {Colors.cyan}{len(lines):,} '
-                        + f'{Colors.orange} lines with {Colors.cyan}{len(keysTimeDistDict):,}'
-                        + f'{Colors.orange} unique entries so far{Colors.reset}')
+            
+            if verbose:
+                progress.console.print(f'[dark_orange bold]Added latencies to [cyan bold]{len(lines):,} '
+                                     + f'[dark_orange bold] lines with [cyan bold]{len(keysTimeDistDict):,}'
+                                     + f'[dark_orange bold] unique entries so far')
     
     writeMetaData(output_file_name, time_generators, cluster_dists, latency_values, keysTimeDistDict)
     
@@ -143,17 +145,25 @@ def main():
     
     makedirs(OUTPUT_DIR, exist_ok=True)
     
-    with Timer():
-        with tqdm.tqdm(total = len(input_files_paths) * len(generators)) as progressbar:
-            for file in input_files_paths:
-                trace_name = get_trace_name(file)
-                seed = seeds[trace_name]
-                set_name = f'IBMOS-{trace_name}-' if "IBMObjectStore" in file else trace_name
-                for dists, probs, suffix in generators:
-                    addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, [file], args.key_base, dists, 
-                                        probs, gen_timestamps=not args.contains_timestamps, verbose=args.verbose, 
-                                        compress=args.compress, set_name=set_name + suffix, seed=seed)
-                    progressbar.update(1)
+    with Progress(TextColumn("[progress.description]{task.description}"),
+                  BarColumn(),
+                  TaskProgressColumn(),
+                  SpinnerColumn()) as progress:
+        file_progress = progress.add_task('[bold #adc178]File progress', total=len(input_files_paths), start=True)
+        generator_progress = progress.add_task('[bold #bedcfe]Generators progress', total=len(generators), start=True)
+        
+        for file in input_files_paths:
+            trace_name = get_trace_name(file)
+            seed = seeds[trace_name]
+            set_name = f'IBMOS-{trace_name}-' if "IBMObjectStore" in file else trace_name
+            for dists, probs, suffix in generators:
+                addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, file, args.key_base, dists, 
+                                    probs, gen_timestamps=not args.contains_timestamps, progress=progress, verbose=args.verbose, 
+                                    compress=args.compress, set_name=set_name + suffix, seed=seed)
+                progress.update(generator_progress, update=1)
+            
+            progress.reset(generator_progress)
+            progress.update(file_progress, update=1)
 
  
 if __name__ == '__main__':
