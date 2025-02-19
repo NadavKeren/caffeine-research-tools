@@ -38,7 +38,7 @@ PIPELINE_SETTINGS_WITHOUT_QUOTA = {"pipeline.num-of-blocks" : 3,
                                    "pipeline.blocks.1.type": "LFU",
                                    "pipeline.blocks.1.decay-factor" : 1, 
                                    "pipeline.blocks.1.max-lists" : 10,
-                                   "pipeline.blocks.2.type": "BC",
+                                   "pipeline.blocks.2.type": "LBU",
                                    "pipeline.burst.aging-window-size" : 50, 
                                    "pipeline.burst.age-smoothing" : 0.0025, 
                                    "pipeline.burst.number-of-partitions" : 4, 
@@ -91,9 +91,9 @@ PIPELINE_LFU_ONLY = {"pipeline.num-of-blocks" : 1,
                      "pipeline.blocks.0.max-lists" : 10}
 
 
-PIPELINE_BC_ONLY = {"pipeline.num-of-blocks" : 1, 
+PIPELINE_LBU_ONLY = {"pipeline.num-of-blocks" : 1, 
                     "pipeline.num-of-quanta" : 16,
-                    "pipeline.blocks.0.type": "BC",
+                    "pipeline.blocks.0.type": "LBU",
                     "pipeline.blocks.0.quota": 16, 
                     "pipeline.burst.aging-window-size" : 50, 
                     "pipeline.burst.age-smoothing" : 0.0025, 
@@ -249,9 +249,9 @@ def run_all_simple(fname: str, trace_name: str, cache_size: int) -> None:
     run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
             name='LFU', additional_settings={**PIPELINE_LFU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
     
-    csv_filename = f'BC-{trace_name}-{cache_size}'
+    csv_filename = f'LBU-{trace_name}-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
-            name='BC', additional_settings={**PIPELINE_BC_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
+            name='LBU', additional_settings={**PIPELINE_LBU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
 
 
 def run_grid_search(fname: str, trace_name: str, cache_size: int) -> None:
@@ -273,7 +273,7 @@ def run_grid_search(fname: str, trace_name: str, cache_size: int) -> None:
                                               "pipeline.blocks.2.quota": bc_size,
                                               **SIZE_SETTINGS},
                          should_keep_dump=False,
-                         additional_csv_data={'LRU Size': lru_size, 'LFU Size': lfu_size, 'BC Size': bc_size},
+                         additional_csv_data={'LRU Size': lru_size, 'LFU Size': lfu_size, 'LBU Size': bc_size},
                          progress_console=progress.console)
                 progress.update(lfu_progress, advance=1)
             
@@ -298,7 +298,7 @@ def run_grid_search_old(fname: str, trace_name: str, cache_size: int) -> None:
                                               "ca-bb-window.percent-main": [percent_main],
                                               "ca-bb-window.percent-burst-block": bc_percent},
                          should_keep_dump=False,
-                         additional_csv_data={'LRU Size': lru_size, 'LFU Size': lfu_size, 'BC Size': bc_size},
+                         additional_csv_data={'LRU Size': lru_size, 'LFU Size': lfu_size, 'LBU Size': bc_size},
                          progress_console=progress.console)
                 progress.update(lfu_progress, advance=1)
             
