@@ -98,6 +98,8 @@ def main():
     parser.add_argument('-i', '--input-dir', help='The processed files path', type=str, default=None)
     parser.add_argument('-o', '--output-dir', help='The path for the newly created files', type=str, default=None)
     parser.add_argument('-b', '--key-base', help='The base of the key string', type=int, default=10)
+    parser.add_argument('--lower', help='The lower bound of the item multipliction', type=int, default=10)
+    parser.add_argument('--upper', help='The upper bound of the item multipliction', type=int, default=20)
     
     args = parser.parse_args()
     
@@ -116,13 +118,16 @@ def main():
     
     makedirs(OUTPUT_DIR, exist_ok=True)
     
+    assert args.lower < args.upper, "The upper bound should be bigger than the lower bound"
+    
     with Timer():
         for file, _ in zip(input_files_paths, tqdm.tqdm(range(len(input_files_paths)), colour='yellow', leave=False)):
             trace_name = get_trace_name(file)
             seed = seeds[trace_name]
-            set_name = f'IBMOS-{trace_name}-M-10-20-L'
+            set_name = f'IBMOS-{trace_name}-M-{args.lower}-{args.upper}-L'
 
-            addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, file, args.key_base, set_name, 10, 20, seed)
+            addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, file, args.key_base, 
+                                   set_name, args.lower, args.upper, seed)
 
 
 if __name__ == '__main__':

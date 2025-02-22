@@ -121,7 +121,8 @@ def main():
     parser.add_argument('-o', '--output-dir', help='The path for the newly created files', type=str, default=None)
     parser.add_argument('-t', '--contains-timestamps', help='Toggle whether the file contains timestamps', action='store_true')
     parser.add_argument('-b', '--key-base', help='The base of the key string', type=int, default=10)
-    parser.add_argument('--time', type=int, required=False, help='The second dist time in two-dist generation')
+    parser.add_argument('--time-low', type=int, required=False, help='The first dist time in two-dist generation', default=100)
+    parser.add_argument('--time-high', type=int, required=False, help='The second dist time in two-dist generation', default=1000)
     
     args = parser.parse_args()
     
@@ -131,17 +132,16 @@ def main():
     OUTPUT_DIR = args.output_dir if args.output_dir else './out_latencies'
     
 
-    # times = [args.time] if args.time is not None else [100, 200, 400, 800]
-    generators = [([SingleValueDist(100), SingleValueDist(1000)], [0.5, 0.5], '100-1000')]
+    dists = [SingleValueDist(args.time_low), SingleValueDist(args.time_high)]
+    probs = [0.5, 0.5]
+    suffix = f'{args.time_low}-{args.time_high}'
     seeds = {'trace018' : 2867, 'trace005' : 22874, 'trace000' : 36661, 'trace045' : 4150,
              'trace036' : 45755, 'trace012' : 32153, 'trace024' : 23516, 'trace031' : 38080,
              'trace049' : 57461, 'trace034' : 33022, 'trace044' : 7033, 'trace029' : 38573,
              'trace010' : 43215, 'financial1' : 282879, 'financial2' : 940359, 'websearch1': 726598,
              'websearch2' : 31069, 'websearch3' : 273312}
     input_files_paths = [f for f in listdir(INPUT_DIR)]
-    # input_files_with_names = [(f, time, get_trace_name(f), f'IBMOS_{get_trace_name(f)}_50_{time}') 
-    #                           for f in input_files_paths 
-    #                           for time in times]
+
     
     makedirs(OUTPUT_DIR, exist_ok=True)
     
@@ -150,19 +150,16 @@ def main():
                   TaskProgressColumn(),
                   SpinnerColumn()) as progress:
         file_progress = progress.add_task('[bold #adc178]File progress', total=len(input_files_paths), start=True)
-        generator_progress = progress.add_task('[bold #bedcfe]Generators progress', total=len(generators), start=True)
         
         for file in input_files_paths:
+            progress.console.print(f'Processing {file}')
             trace_name = get_trace_name(file)
             seed = seeds[trace_name]
             set_name = f'IBMOS-{trace_name}-' if "IBMObjectStore" in file else trace_name
-            for dists, probs, suffix in generators:
-                addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, file, args.key_base, dists, 
-                                    probs, gen_timestamps=not args.contains_timestamps, progress=progress, verbose=args.verbose, 
-                                    compress=args.compress, set_name=set_name + suffix, seed=seed)
-                progress.update(generator_progress, update=1)
             
-            progress.reset(generator_progress)
+            addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, file, args.key_base, dists, 
+                                probs, gen_timestamps=not args.contains_timestamps, progress=progress, verbose=args.verbose, 
+                                compress=args.compress, set_name=set_name + suffix, seed=seed)
             progress.update(file_progress, update=1)
 
  
