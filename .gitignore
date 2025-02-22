@@ -15,6 +15,10 @@ csvs/
 *.svg
 *.jpg
 *.log
+*.csv
+*.dump
+*.quota-dump
+IBMObjectStoreTrace*Part*
  
 # Python temp files
 __pycache__/
