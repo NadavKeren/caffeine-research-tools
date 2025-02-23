@@ -15,7 +15,8 @@ class Policy(Enum):
     full_ghost = 'latency-aware.FGHC'
     sampled_ghost = 'latency-aware.SampledHillClimber'
     random_climber = 'latency-aware.RHC'
-    
+    arc = 'adaptive.Arc'
+    frd = 'irr.Frd'
     
     
     ca_arc = "adaptive.CA-Arc"

@@ -319,6 +319,12 @@ def run_other(fname: str, trace_name: str, cache_size: int):
     csv_filename = f'GDWheel-{trace_name}-{cache_size}.csv'
     run_test(fname, trace_name, cache_size, csv_filename, 'gdwheel', should_keep_dump=False)
     
+    csv_filename = f'ARC-{trace_name}-{cache_size}.csv'
+    run_test(fname, trace_name, cache_size, csv_filename, 'arc', should_keep_dump=False)
+    
+    csv_filename = f'FRD-{trace_name}-{cache_size}.csv'
+    run_test(fname, trace_name, cache_size, csv_filename, 'frd', should_keep_dump=False)
+    
     csv_filename = f'YanLi-{trace_name}-{cache_size}.csv'
     run_test(fname, trace_name, cache_size, csv_filename, 'yan_li', should_keep_dump=False)
     
@@ -334,7 +340,7 @@ def main():
     parser.add_argument('--run-all-shc', help="Run rounds of Sample Hill Climber with variable rates", action='store_true', required=False)
     parser.add_argument('--run-single-shc', help="Run rounds of Sample Hill Climber with a single rate", action='store_true', required=False)
     parser.add_argument('--run-aca', help="Run rounds of the Adaptive Cost-Aware Window-TinyLFU", action='store_true', required=False)
-    parser.add_argument('--run-base', help="Run the baseline test of FGHC", action='store_true', required=False)
+    parser.add_argument('--run-base', help="Run the baseline test of FGHC RFB and RF", action='store_true', required=False)
     parser.add_argument('--run-grid-search', help="Run grid search for finding the optimal static configuration", action='store_true', required=False)
     parser.add_argument('--run-old', help="Run grid search for finding the optimal static configuration with the old implementation of WCABB", action='store_true', required=False)
     parser.add_argument('--run-other', help="Run comparison algorithms", action='store_true', required=False)
