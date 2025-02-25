@@ -187,7 +187,7 @@ def run_full_ghost(fname: str, trace_name: str, cache_size: int) -> None:
     
     csv_filename = f'FGHC-{trace_name}-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'full_ghost', 
-                name='FGHC', additional_settings={**PIPELINE_LRU_START_SETTINGS, 
+                name='FGHC', additional_settings={**PIPELINE_EQUAL_START_SETTINGS, 
                                                   **SIZE_SETTINGS},
                 should_keep_dump=True)
     
@@ -211,7 +211,7 @@ def run_sampled_all(fname: str, trace_name: str, cache_size: int, round: int, se
             
             csv_filename = f'sampled-O{sample_rate}-{trace_name}-{cache_size}-R{round}'
             run_test(fname, trace_name, cache_size, csv_filename, 'sampled_ghost', 
-                    name=f'O{sample_rate}', additional_settings={**PIPELINE_LRU_START_SETTINGS, 
+                    name=f'O{sample_rate}', additional_settings={**PIPELINE_EQUAL_START_SETTINGS, 
                                                                         **SAMPLE_SETTINGS, 
                                                                         **SIZE_SETTINGS, 
                                                                         SEED_PATH: seed},
@@ -230,7 +230,7 @@ def run_single_sampled(fname: str, trace_name: str, cache_size: int, round: int,
     
     csv_filename = f'sampled-O{sample_rate}-{trace_name}-{cache_size}-R{round}'
     run_test(fname, trace_name, cache_size, csv_filename, 'sampled_ghost', 
-            name=f'O{sample_rate}', additional_settings={**PIPELINE_LRU_START_SETTINGS, 
+            name=f'O{sample_rate}', additional_settings={**PIPELINE_EQUAL_START_SETTINGS, 
                                                                 **SAMPLE_SETTINGS, 
                                                                 **SIZE_SETTINGS, 
                                                                 SEED_PATH: seed},
