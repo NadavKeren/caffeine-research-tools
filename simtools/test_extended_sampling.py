@@ -20,6 +20,7 @@ with open(current_dir / 'conf.json') as conf_file:
 caffeine_root = local_conf['caffeine_root']
 resources = local_conf['resources'] if local_conf['resources'] != '' else caffeine_root
 TRACES_DIR = f'{resources}'
+RESULTS_DIR = local_conf['results'] if local_conf['resources'] != '' else './results/'
 
 
 pretty.install()
@@ -151,7 +152,7 @@ def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str
     else:
         console.log(f'[bold #a98467]Running {algorithm} on trace: {trace_name}, size: {cache_size}' + f' Name: {name}' if name is not None else "")
     
-    if (Path(f'./results/{output_filename}.csv').exists()): # * Skipping tests with existing results        
+    if (Path(f'{RESULTS_DIR}/{output_filename}.csv').exists()): # * Skipping tests with existing results        
         return
     
     settings = SETTINGS if additional_settings is None else {**SETTINGS, **additional_settings}
@@ -177,7 +178,7 @@ def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str
             for key, value in additional_csv_data.items():
                 single_run_result[key] = value
         
-        single_run_result.to_csv(f'./results/{output_filename}.csv')
+        single_run_result.to_csv(f'{RESULTS_DIR}/{output_filename}.csv')
         if progress_console:
             progress_console.log(f"[bold #ffd166]Avg. Pen. {int(single_run_result['Average Penalty'].iloc[0])}")
         else:
@@ -302,8 +303,8 @@ def run_grid_search_old(fname: str, trace_name: str, cache_size: int) -> None:
     with Progress() as progress:
         lru_progress = progress.add_task('[bold #adc178]Old LA-LRU quota', total=16, start=True)
         lfu_progress = progress.add_task('[bold #bedcfe]Old LA-LFU quota', total=16, start=True)
-        for lru_size in range(1, NUM_OF_QUANTA + 1):
-            for lfu_size in range(1, NUM_OF_QUANTA - lru_size + 1):
+        for lru_size in range(NUM_OF_QUANTA + 1):
+            for lfu_size in range(NUM_OF_QUANTA - lru_size + 1):
                 percent_main = lfu_size / (lru_size + lfu_size)
                 bc_percent = (NUM_OF_QUANTA - (lru_size + lfu_size)) / NUM_OF_QUANTA
                 bc_size = NUM_OF_QUANTA - lru_size - lfu_size
@@ -330,8 +331,8 @@ def run_grid_search_non_ca(fname: str, trace_name: str, cache_size: int) -> None
     with Progress() as progress:
         lru_progress = progress.add_task('[bold #adc178]LRU quota', total=16, start=True)
         lfu_progress = progress.add_task('[bold #bedcfe]LFU quota', total=16, start=True)
-        for lru_size in range(1, NUM_OF_QUANTA + 1):
-            for lfu_size in range(1, NUM_OF_QUANTA - lru_size + 1):
+        for lru_size in range(NUM_OF_QUANTA + 1):
+            for lfu_size in range(NUM_OF_QUANTA - lru_size + 1):
                 percent_main = lfu_size / (lru_size + lfu_size)
                 bc_percent = (NUM_OF_QUANTA - (lru_size + lfu_size)) / NUM_OF_QUANTA
                 bc_size = NUM_OF_QUANTA - lru_size - lfu_size
@@ -429,9 +430,9 @@ def main():
                     if args.run_dual:
                         run_single_sampled(dual_trace_file, dual_trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress, sample_rate=2)
                 elif args.run_all_shc:
-                    run_all_sampled(file, trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress)
+                    run_sampled_all(file, trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress)
                     if args.run_dual:
-                        run_all_sampled(dual_trace_file, dual_trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress)
+                        run_sampled_all(dual_trace_file, dual_trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress)
                 else:
                     raise AssertionError("Should be either run-single or run-all")
                 
