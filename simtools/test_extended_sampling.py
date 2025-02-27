@@ -31,20 +31,20 @@ SIZES = {'trace010' : 2 ** 9, 'trace024' : 2 ** 9, 'trace031' : 2 ** 16,
          'trace045' : 2 ** 12, 'trace034' : 2 ** 14, 'trace029' : 2 ** 9,
          'trace012' : 2 ** 10}
 
-PIPELINE_SETTINGS_WITHOUT_QUOTA = {"pipeline.num-of-blocks" : 3,
-                                   "pipeline.blocks.0.type": "LA-LRU",
-                                   "pipeline.blocks.0.decay-factor" : 1, 
-                                   "pipeline.blocks.0.max-lists" : 10,
-                                   "pipeline.blocks.1.type": "LA-LFU",
-                                   "pipeline.blocks.1.decay-factor" : 1, 
-                                   "pipeline.blocks.1.max-lists" : 10,
-                                   "pipeline.blocks.2.type": "LBU",
-                                   "pipeline.burst.aging-window-size" : 50, 
-                                   "pipeline.burst.age-smoothing" : 0.0025, 
-                                   "pipeline.burst.number-of-partitions" : 4, 
-                                   "pipeline.burst.type" : "normal", 
-                                   "pipeline.burst.sketch.eps" : 0.0001, 
-                                   "pipeline.burst.sketch.confidence" : 0.99}
+PIPELINE_CA_SETTINGS_WITHOUT_QUOTA = {"pipeline.num-of-blocks" : 3,
+                                      "pipeline.blocks.0.type": "LA-LRU",
+                                      "pipeline.blocks.0.decay-factor" : 1, 
+                                      "pipeline.blocks.0.max-lists" : 10,
+                                      "pipeline.blocks.1.type": "LA-LFU",
+                                      "pipeline.blocks.1.decay-factor" : 1, 
+                                      "pipeline.blocks.1.max-lists" : 10,
+                                      "pipeline.blocks.2.type": "LBU",
+                                      "pipeline.burst.aging-window-size" : 50, 
+                                      "pipeline.burst.age-smoothing" : 0.0025, 
+                                      "pipeline.burst.number-of-partitions" : 4, 
+                                      "pipeline.burst.type" : "normal", 
+                                      "pipeline.burst.sketch.eps" : 0.0001, 
+                                      "pipeline.burst.sketch.confidence" : 0.99}
                                 
 OLD_WCABB_SETTINGS_WITHOUT_QUOTA = {"ca-bb-window.percent-main-protected": 0.8,
                                     "ca-bb-window.burst-startegy" : "naive",
@@ -56,12 +56,12 @@ OLD_WCABB_SETTINGS_WITHOUT_QUOTA = {"ca-bb-window.percent-main-protected": 0.8,
 
 #* now should add percent-main and perent-burst-block
 
-PIPELINE_EQUAL_START_SETTINGS = {**PIPELINE_SETTINGS_WITHOUT_QUOTA,
+PIPELINE_EQUAL_START_SETTINGS = {**PIPELINE_CA_SETTINGS_WITHOUT_QUOTA,
                                  "pipeline.blocks.0.quota": 5, 
                                  "pipeline.blocks.1.quota": 6, 
                                  "pipeline.blocks.2.quota": 5}
 
-PIPELINE_LRU_START_SETTINGS = {**PIPELINE_SETTINGS_WITHOUT_QUOTA,
+PIPELINE_LRU_START_SETTINGS = {**PIPELINE_CA_SETTINGS_WITHOUT_QUOTA,
                                "pipeline.blocks.0.quota": 14, 
                                "pipeline.blocks.1.quota": 1,
                                "pipeline.blocks.2.quota": 1}
@@ -76,20 +76,37 @@ PIPELINE_SETTINGS_WITHOUT_BURST = {"pipeline.num-of-blocks" : 2,
                                    "pipeline.blocks.1.max-lists" : 10,
                                    "pipeline.blocks.1.quota": 8}
 
-PIPELINE_LRU_ONLY = {"pipeline.num-of-blocks" : 1, 
+PIPELINE_CA_LRU_ONLY = {"pipeline.num-of-blocks" : 1, 
                      "pipeline.num-of-quanta" : 16,
                      "pipeline.blocks.0.type": "LA-LRU",
                      "pipeline.blocks.0.quota": 16, 
                      "pipeline.blocks.0.decay-factor" : 1, 
                      "pipeline.blocks.0.max-lists" : 10}
 
-PIPELINE_LFU_ONLY = {"pipeline.num-of-blocks" : 1, 
-                     "pipeline.num-of-quanta" : 16,
-                     "pipeline.blocks.0.type": "LA-LFU",
-                     "pipeline.blocks.0.quota": 16, 
-                     "pipeline.blocks.0.decay-factor" : 1, 
-                     "pipeline.blocks.0.max-lists" : 10}
+PIPELINE_CA_LFU_ONLY = {"pipeline.num-of-blocks" : 1, 
+                        "pipeline.num-of-quanta" : 16,
+                        "pipeline.blocks.0.type": "LA-LFU",
+                        "pipeline.blocks.0.quota": 16, 
+                        "pipeline.blocks.0.decay-factor" : 1, 
+                        "pipeline.blocks.0.max-lists" : 10}
 
+NATIVE_LFU_SETTINGS = {"pipeline.blocks.1.tiny-lfu.sketch": "count-min-4",
+                       "pipeline.blocks.1.tiny-lfu.count-min.conservative": False,
+                       "pipeline.blocks.1.tiny-lfu.count-min-4.reset": "periodic",
+                       "pipeline.blocks.1.tiny-lfu.count-min-4.counters-multiplier": 1.0,
+                       "pipeline.blocks.1.tiny-lfu.count-min-4.incremental.interval": 16,
+                       "pipeline.blocks.1.tiny-lfu.count-min-4. periodic.doorkeeper.enabled" : False}
+
+
+PIPELINE_SETTINGS_WITHOUT_QUOTA = {"pipeline.num-of-blocks" : 3,
+                                   "pipeline.blocks.0.type": "LRU",
+                                   "pipeline.blocks.1.type": "LFU",
+                                   "pipeline.blocks.2.type": "LBU",
+                                   "pipeline.burst.aging-window-size" : 50, 
+                                   "pipeline.burst.age-smoothing" : 0.0025, 
+                                   "pipeline.burst.number-of-partitions" : 4, 
+                                   "pipeline.burst.type" : "normal",
+                                   **NATIVE_LFU_SETTINGS}
 
 PIPELINE_LBU_ONLY = {"pipeline.num-of-blocks" : 1, 
                     "pipeline.num-of-quanta" : 16,
@@ -243,11 +260,11 @@ def run_all_simple(fname: str, trace_name: str, cache_size: int) -> None:
     
     csv_filename = f'LRU-{trace_name}-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
-            name='LRU', additional_settings={**PIPELINE_LRU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
+            name='LRU', additional_settings={**PIPELINE_CA_LRU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
 
     csv_filename = f'LFU-{trace_name}-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
-            name='LFU', additional_settings={**PIPELINE_LFU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
+            name='LFU', additional_settings={**PIPELINE_CA_LFU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
     
     csv_filename = f'LBU-{trace_name}-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
@@ -259,15 +276,15 @@ def run_grid_search(fname: str, trace_name: str, cache_size: int) -> None:
     SIZE_SETTINGS = {'pipeline.quantum-size': quantum_size}
     
     with Progress() as progress:
-        lru_progress = progress.add_task('[bold #adc178]LRU quota', total=16, start=True)
-        lfu_progress = progress.add_task('[bold #bedcfe]LFU quota', total=16, start=True)
+        lru_progress = progress.add_task('[bold #adc178]LA-LRU quota', total=16, start=True)
+        lfu_progress = progress.add_task('[bold #bedcfe]LA-LFU quota', total=16, start=True)
         for lru_size in range(NUM_OF_QUANTA + 1):
             for lfu_size in range(NUM_OF_QUANTA - lru_size + 1):
                 bc_size = NUM_OF_QUANTA - (lru_size + lfu_size)
                 csv_filename = f'static-{trace_name}-{lru_size}-{lfu_size}-{bc_size}-{cache_size}'
                 run_test(fname, trace_name, cache_size, csv_filename, 'pipeline',
                          name=f"{lru_size}-{lfu_size}-{bc_size}", 
-                         additional_settings={**PIPELINE_SETTINGS_WITHOUT_QUOTA,
+                         additional_settings={**PIPELINE_CA_SETTINGS_WITHOUT_QUOTA,
                                               "pipeline.blocks.0.quota": lru_size, 
                                               "pipeline.blocks.1.quota": lfu_size,
                                               "pipeline.blocks.2.quota": bc_size,
@@ -283,8 +300,8 @@ def run_grid_search(fname: str, trace_name: str, cache_size: int) -> None:
 
 def run_grid_search_old(fname: str, trace_name: str, cache_size: int) -> None:
     with Progress() as progress:
-        lru_progress = progress.add_task('[bold #adc178]LRU quota', total=16, start=True)
-        lfu_progress = progress.add_task('[bold #bedcfe]LFU quota', total=16, start=True)
+        lru_progress = progress.add_task('[bold #adc178]Old LA-LRU quota', total=16, start=True)
+        lfu_progress = progress.add_task('[bold #bedcfe]Old LA-LFU quota', total=16, start=True)
         for lru_size in range(1, NUM_OF_QUANTA + 1):
             for lfu_size in range(1, NUM_OF_QUANTA - lru_size + 1):
                 percent_main = lfu_size / (lru_size + lfu_size)
@@ -304,6 +321,36 @@ def run_grid_search_old(fname: str, trace_name: str, cache_size: int) -> None:
             
             progress.update(lru_progress, advance=1)
             progress.reset(lfu_progress, total=(NUM_OF_QUANTA - lru_size - 1))
+            
+
+def run_grid_search_non_ca(fname: str, trace_name: str, cache_size: int) -> None:
+    quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
+    SIZE_SETTINGS = {'pipeline.quantum-size': quantum_size}
+    
+    with Progress() as progress:
+        lru_progress = progress.add_task('[bold #adc178]LRU quota', total=16, start=True)
+        lfu_progress = progress.add_task('[bold #bedcfe]LFU quota', total=16, start=True)
+        for lru_size in range(1, NUM_OF_QUANTA + 1):
+            for lfu_size in range(1, NUM_OF_QUANTA - lru_size + 1):
+                percent_main = lfu_size / (lru_size + lfu_size)
+                bc_percent = (NUM_OF_QUANTA - (lru_size + lfu_size)) / NUM_OF_QUANTA
+                bc_size = NUM_OF_QUANTA - lru_size - lfu_size
+                
+                csv_filename = f'static-reg-{trace_name}-{lru_size}-{lfu_size}-{bc_size}-{cache_size}'
+                run_test(fname, trace_name, cache_size, csv_filename, 'pipeline',
+                         name=f"{lru_size}-{lfu_size}-{bc_size}", 
+                         additional_settings={**PIPELINE_SETTINGS_WITHOUT_QUOTA,
+                                              "pipeline.blocks.0.quota": lru_size, 
+                                              "pipeline.blocks.1.quota": lfu_size,
+                                              "pipeline.blocks.2.quota": bc_size,
+                                              **SIZE_SETTINGS},
+                         should_keep_dump=False,
+                         additional_csv_data={'LRU Size': lru_size, 'LFU Size': lfu_size, 'LBU Size': bc_size},
+                         progress_console=progress.console)
+                progress.update(lfu_progress, advance=1)
+            
+            progress.update(lru_progress, advance=1)
+            progress.reset(lfu_progress, total=(NUM_OF_QUANTA - lru_size - 1))
 
 
 def run_adaptive_CA(fname: str, trace_name: str, cache_size: int) -> None:
@@ -313,20 +360,20 @@ def run_adaptive_CA(fname: str, trace_name: str, cache_size: int) -> None:
     
 
 def run_other(fname: str, trace_name: str, cache_size: int):
-    csv_filename = f'Hyperbolic-{trace_name}-{cache_size}.csv'
-    run_test(fname, trace_name, cache_size, csv_filename, 'hyperbolic', should_keep_dump=False)
+    csv_filename = f'Hyperbolic-{trace_name}-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'hyperbolic', name="hyperbolic", should_keep_dump=False)
     
-    csv_filename = f'GDWheel-{trace_name}-{cache_size}.csv'
-    run_test(fname, trace_name, cache_size, csv_filename, 'gdwheel', should_keep_dump=False)
+    csv_filename = f'GDWheel-{trace_name}-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'gdwheel', name="GD-Wheel", should_keep_dump=False)
     
-    csv_filename = f'ARC-{trace_name}-{cache_size}.csv'
-    run_test(fname, trace_name, cache_size, csv_filename, 'arc', should_keep_dump=False)
+    csv_filename = f'ARC-{trace_name}-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'arc', name="ARC", should_keep_dump=False)
     
-    csv_filename = f'FRD-{trace_name}-{cache_size}.csv'
-    run_test(fname, trace_name, cache_size, csv_filename, 'frd', should_keep_dump=False)
+    csv_filename = f'FRD-{trace_name}-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'frd', name="FRD", should_keep_dump=False)
     
-    csv_filename = f'YanLi-{trace_name}-{cache_size}.csv'
-    run_test(fname, trace_name, cache_size, csv_filename, 'yan_li', should_keep_dump=False)
+    csv_filename = f'YanLi-{trace_name}-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'yan_li', name="Cache-LA", should_keep_dump=False)
     
     
 def main():
@@ -345,6 +392,7 @@ def main():
     parser.add_argument('--run-old', help="Run grid search for finding the optimal static configuration with the old implementation of WCABB", action='store_true', required=False)
     parser.add_argument('--run-other', help="Run comparison algorithms", action='store_true', required=False)
     parser.add_argument('--run-dual', help="Run all algorithms on the trace file chained twice", action='store_true', required=False)
+    parser.add_argument('--run-non-ca-grid-search', help="Run grid search with non-CA LRU and LFU", action='store_true', required=False)
     
     args = parser.parse_args()
     
@@ -399,6 +447,9 @@ def main():
         
     if args.run_old:
         run_grid_search_old(file, trace_name, cache_size)
+        
+    if args.run_non_ca_grid_search:
+        run_grid_search_non_ca(file, trace_name, cache_size)
         
     if args.run_other:
         run_other(file, trace_name, cache_size)
