@@ -121,8 +121,8 @@ def main():
     parser.add_argument('-o', '--output-dir', help='The path for the newly created files', type=str, default=None)
     parser.add_argument('-t', '--contains-timestamps', help='Toggle whether the file contains timestamps', action='store_true')
     parser.add_argument('-b', '--key-base', help='The base of the key string', type=int, default=10)
-    parser.add_argument('--time-low', type=int, required=False, help='The first dist time in two-dist generation', default=100)
-    parser.add_argument('--time-high', type=int, required=False, help='The second dist time in two-dist generation', default=1000)
+    # parser.add_argument('--time-low', type=int, required=False, help='The first dist time in two-dist generation', default=100)
+    # parser.add_argument('--time-high', type=int, required=False, help='The second dist time in two-dist generation', default=1000)
     
     args = parser.parse_args()
     
@@ -131,15 +131,16 @@ def main():
     INPUT_DIR = args.input_dir if args.input_dir else './processed'
     OUTPUT_DIR = args.output_dir if args.output_dir else './out_latencies'
     
-
-    dists = [SingleValueDist(args.time_low), SingleValueDist(args.time_high)]
+    params = [(120, 12.16), (40, 6.08)]
+    dists = [NormalDist(mu, sigma) for (mu, sigma) in params]
     probs = [0.5, 0.5]
-    suffix = f'{args.time_low}-{args.time_high}'
+    suffix = '-'.join(f'{A + i}-{int(mu - 1.6449*sigma)}-{int(mu + 1.6449*sigma)}' for i, (mu, sigma) in enumerate(params))
+    
     seeds = {'trace018' : 2867, 'trace005' : 22874, 'trace000' : 36661, 'trace045' : 4150,
              'trace036' : 45755, 'trace012' : 32153, 'trace024' : 23516, 'trace031' : 38080,
              'trace049' : 57461, 'trace034' : 33022, 'trace044' : 7033, 'trace029' : 38573,
              'trace010' : 43215, 'financial1' : 282879, 'financial2' : 940359, 'websearch1': 726598,
-             'websearch2' : 31069, 'websearch3' : 273312}
+             'websearch2' : 31069, 'websearch3' : 273312, 'google-cluster1': 163625615}
     input_files_paths = [f for f in listdir(INPUT_DIR)]
 
     
