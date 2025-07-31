@@ -12,15 +12,13 @@ from rich.progress import Progress
 filepath = Path(__file__) 
 current_dir = filepath.parent
 filepath = current_dir.resolve()
-result_dir = current_dir / 'results'
-result_dir.mkdir(exist_ok=True)
 
 with open(current_dir / 'conf.json') as conf_file:
     local_conf = json.load(conf_file)
 caffeine_root = local_conf['caffeine_root']
 resources = local_conf['resources'] if local_conf['resources'] != '' else caffeine_root
 TRACES_DIR = f'{resources}'
-RESULTS_DIR = local_conf['results'] if local_conf['resources'] != '' else './results/'
+RESULTS_DIR = local_conf['results'] if local_conf['results'] != '' else './results/'
 
 
 pretty.install()
@@ -196,7 +194,7 @@ def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str
                 raise AssertionError()
             
             dumpfile = quota_files[0]
-            dumpfile.rename(result_dir / f'{output_filename}.quota-dump')
+            dumpfile.rename(RESULTS_DIR / f'{output_filename}.quota-dump')
 
 
 def run_full_ghost(fname: str, trace_name: str, cache_size: int) -> None:
