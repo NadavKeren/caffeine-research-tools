@@ -24,6 +24,8 @@ RESULTS_DIR = local_conf['results'] if local_conf['results'] != '' else './resul
 pretty.install()
 console = Console()
 
+OUTPUT_SUFFIX = ""
+
 NUM_OF_QUANTA = 16
 
 SIZES = {'trace010' : 2 ** 9, 'trace024' : 2 ** 9, 'trace031' : 2 ** 16,
@@ -138,6 +140,10 @@ def get_trace_name(fname: str):
     return name[0]
 
 
+def get_dists(fname: str, trace_name: str):
+    return fname.lstrip(f'IBMOS-{trace_name}').rstrip('.xz')
+
+
 def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str,
              algorithm : str, should_keep_dump : bool = False, additional_settings = None,
              name = None, additional_csv_data = None,
@@ -201,13 +207,13 @@ def run_full_ghost(fname: str, trace_name: str, cache_size: int) -> None:
     quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
     SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
     
-    csv_filename = f'FGHC-{trace_name}-{cache_size}'
+    csv_filename = f'FGHC-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'full_ghost', 
                 name='FGHC', additional_settings={**PIPELINE_EQUAL_START_SETTINGS, 
                                                   **SIZE_SETTINGS},
                 should_keep_dump=True)
     
-    csv_filename = f'FGHC-RF-{trace_name}-{cache_size}'
+    csv_filename = f'FGHC-RF-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'full_ghost', 
                 name='FGHC-RF', additional_settings={**PIPELINE_SETTINGS_WITHOUT_BURST, 
                                                      **SIZE_SETTINGS},
@@ -225,7 +231,7 @@ def run_sampled_all(fname: str, trace_name: str, cache_size: int, round: int, se
             
             SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
             
-            csv_filename = f'sampled-O{sample_rate}-{trace_name}-{cache_size}-R{round}'
+            csv_filename = f'sampled-O{sample_rate}-{OUTPUT_SUFFIX}-R{round}'
             run_test(fname, trace_name, cache_size, csv_filename, 'sampled_ghost', 
                     name=f'O{sample_rate}', additional_settings={**PIPELINE_EQUAL_START_SETTINGS, 
                                                                         **SAMPLE_SETTINGS, 
@@ -244,7 +250,7 @@ def run_single_sampled(fname: str, trace_name: str, cache_size: int, round: int,
     
     SIZE_SETTINGS = {'pipeline.quantum-size' : quantum_size}
     
-    csv_filename = f'sampled-O{sample_rate}-{trace_name}-{cache_size}-R{round}'
+    csv_filename = f'sampled-O{sample_rate}-{OUTPUT_SUFFIX}-R{round}'
     run_test(fname, trace_name, cache_size, csv_filename, 'sampled_ghost', 
             name=f'O{sample_rate}', additional_settings={**PIPELINE_EQUAL_START_SETTINGS, 
                                                                 **SAMPLE_SETTINGS, 
@@ -257,15 +263,15 @@ def run_all_simple(fname: str, trace_name: str, cache_size: int) -> None:
     quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
     SIZE_SETTINGS = {'pipeline.quantum-size': quantum_size}
     
-    csv_filename = f'LRU-{trace_name}-{cache_size}'
+    csv_filename = f'LRU-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
             name='LRU', additional_settings={**PIPELINE_CA_LRU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
 
-    csv_filename = f'LFU-{trace_name}-{cache_size}'
+    csv_filename = f'LFU-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
             name='LFU', additional_settings={**PIPELINE_CA_LFU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
     
-    csv_filename = f'LBU-{trace_name}-{cache_size}'
+    csv_filename = f'LBU-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'pipeline', 
             name='LBU', additional_settings={**PIPELINE_LBU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
 
@@ -280,7 +286,7 @@ def run_grid_search(fname: str, trace_name: str, cache_size: int) -> None:
         for lru_size in range(NUM_OF_QUANTA + 1):
             for lfu_size in range(NUM_OF_QUANTA - lru_size + 1):
                 bc_size = NUM_OF_QUANTA - (lru_size + lfu_size)
-                csv_filename = f'static-{trace_name}-{lru_size}-{lfu_size}-{bc_size}-{cache_size}'
+                csv_filename = f'static-{lru_size}-{lfu_size}-{bc_size}-{OUTPUT_SUFFIX}'
                 run_test(fname, trace_name, cache_size, csv_filename, 'pipeline',
                          name=f"{lru_size}-{lfu_size}-{bc_size}", 
                          additional_settings={**PIPELINE_CA_SETTINGS_WITHOUT_QUOTA,
@@ -371,8 +377,14 @@ def run_other(fname: str, trace_name: str, cache_size: int):
     csv_filename = f'FRD-{trace_name}-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'frd', name="FRD", should_keep_dump=False)
     
-    csv_filename = f'YanLi-{trace_name}-{cache_size}'
+    csv_filename = f'LA-Cache-{trace_name}-{cache_size}'
     run_test(fname, trace_name, cache_size, csv_filename, 'yan_li', name="Cache-LA", should_keep_dump=False)
+
+    csv_filename = f'S3-FIFO-{trace_name}-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 's3_fifo', name="S3-FIFO", should_keep_dump=False)
+
+    csv_filename = f'SIEVE-{trace_name}-{cache_size}'
+    run_test(fname, trace_name, cache_size, csv_filename, 'sieve', name="SIEVE", should_keep_dump=False)
     
     
 def main():
@@ -401,6 +413,9 @@ def main():
 
     trace_name = args.trace_name if args.trace_name else get_trace_name(file)
     cache_size = args.cache_size if args.cache_size else SIZES.get(trace_name)
+    dists = get_dists(file, trace_name)
+
+    OUTPUT_SUFFIX = f'{trace_name}-{dists}-{cache_size}'
     
     dual_trace_name = f'{trace_name}-{trace_name}'
     dual_trace_file = f"IBMOS-{dual_trace_name}.xz"
