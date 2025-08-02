@@ -131,10 +131,8 @@ def main():
     INPUT_DIR = args.input_dir if args.input_dir else './processed'
     OUTPUT_DIR = args.output_dir if args.output_dir else './out_latencies'
     
-    params = [(120, 12.16), (40, 6.08)]
-    dists = [NormalDist(mu, sigma) for (mu, sigma) in params]
-    probs = [0.5, 0.5]
-    suffix = '-'.join(f'{A + i}-{int(mu - 1.6449*sigma)}-{int(mu + 1.6449*sigma)}' for i, (mu, sigma) in enumerate(params))
+    dists = [([(120, 12.16), (40, 6.08)], [0.5, 0.5]), 
+            ([(120, 12.16), (340, 14), (675, 15.2)], [0.34, 0.33, 0.33])]
     
     seeds = {'trace018' : 2867, 'trace005' : 22874, 'trace000' : 36661, 'trace045' : 4150,
              'trace036' : 45755, 'trace012' : 32153, 'trace024' : 23516, 'trace031' : 38080,
@@ -150,18 +148,25 @@ def main():
                   BarColumn(),
                   TaskProgressColumn(),
                   SpinnerColumn()) as progress:
-        file_progress = progress.add_task('[bold #adc178]File progress', total=len(input_files_paths), start=True)
-        
-        for file in input_files_paths:
-            progress.console.print(f'Processing {file}')
-            trace_name = get_trace_name(file)
-            seed = seeds[trace_name]
-            set_name = f'IBMOS-{trace_name}-' if "IBMObjectStore" in file else trace_name
+        gen_progress = progress.add_task('[bold]Distribution', total=len(dists), start=True)
+        for (params, probs) in dists:
+            suffix = '-'.join(f'{chr(ord('A') + i)}-{int(mu - 1.6449*sigma)}-{int(mu + 1.6449*sigma)}' for i, (mu, sigma) in enumerate(params))
+            dist_gen = [NormalDist(mu, sigma) for (mu, sigma) in params]
+
+            file_progress = progress.add_task('[bold #adc178]File progress', total=len(input_files_paths), start=True)
             
-            addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, file, args.key_base, dists, 
-                                probs, gen_timestamps=not args.contains_timestamps, progress=progress, verbose=args.verbose, 
-                                compress=args.compress, set_name=set_name + suffix, seed=seed)
-            progress.update(file_progress, update=1)
+            for file in input_files_paths:
+                progress.console.print(f'Processing {file}')
+                trace_name = get_trace_name(file)
+                seed = seeds[trace_name]
+                set_name = f'IBMOS-{trace_name}-' if "IBMObjectStore" in file else trace_name
+                
+                addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, file, args.key_base, dist_gen, 
+                                    probs, gen_timestamps=not args.contains_timestamps, progress=progress, verbose=args.verbose, 
+                                    compress=args.compress, set_name=set_name + suffix, seed=seed)
+                progress.update(file_progress, update=1)
+            
+            progress.update(gen_progress, update=1)
 
  
 if __name__ == '__main__':
