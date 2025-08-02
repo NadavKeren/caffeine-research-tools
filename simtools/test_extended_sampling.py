@@ -4,6 +4,7 @@ import re
 from os import urandom
 from pathlib import Path
 import json
+import shutil
 
 from rich import pretty
 from rich.console import Console
@@ -148,6 +149,7 @@ def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str
              algorithm : str, should_keep_dump : bool = False, additional_settings = None,
              name = None, additional_csv_data = None,
              progress_console = None) -> None:
+    print(output_filename)
     if progress_console:
         if name is None:
             progress_console.log(f'[bold #a98467]Running {algorithm} on trace: {trace_name}, size: {cache_size}' + f' Name: {name}' if name is not None else "")
@@ -200,7 +202,8 @@ def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str
                 raise AssertionError()
             
             dumpfile = quota_files[0]
-            dumpfile.rename(RESULTS_DIR / f'{output_filename}.quota-dump')
+            destination = Path(RESULTS_DIR) / f'{output_filename}.quota-dump'
+            shutil.move(dumpfile, destination)
 
 
 def run_full_ghost(fname: str, trace_name: str, cache_size: int) -> None:
@@ -415,6 +418,7 @@ def main():
     cache_size = args.cache_size if args.cache_size else SIZES.get(trace_name)
     dists = get_dists(file, trace_name)
 
+    global OUTPUT_SUFFIX
     OUTPUT_SUFFIX = f'{trace_name}-{dists}-{cache_size}'
     
     dual_trace_name = f'{trace_name}-{trace_name}'
