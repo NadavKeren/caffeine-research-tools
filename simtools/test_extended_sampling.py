@@ -362,31 +362,31 @@ def run_grid_search_non_ca(fname: str, trace_name: str, cache_size: int) -> None
 
 
 def run_adaptive_CA(fname: str, trace_name: str, cache_size: int) -> None:
-    csv_filename = f'ACA-{trace_name}-{cache_size}'
+    csv_filename = f'ACA-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'adaptive_ca',
              should_keep_dump=False)
     
 
 def run_other(fname: str, trace_name: str, cache_size: int):
-    csv_filename = f'Hyperbolic-{trace_name}-{cache_size}'
+    csv_filename = f'Hyperbolic-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'hyperbolic', name="hyperbolic", should_keep_dump=False)
     
-    csv_filename = f'GDWheel-{trace_name}-{cache_size}'
+    csv_filename = f'GDWheel-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'gdwheel', name="GD-Wheel", should_keep_dump=False)
     
-    csv_filename = f'ARC-{trace_name}-{cache_size}'
+    csv_filename = f'ARC-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'arc', name="ARC", should_keep_dump=False)
     
-    csv_filename = f'FRD-{trace_name}-{cache_size}'
+    csv_filename = f'FRD-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'frd', name="FRD", should_keep_dump=False)
     
-    csv_filename = f'LA-Cache-{trace_name}-{cache_size}'
+    csv_filename = f'LA-Cache-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'yan_li', name="Cache-LA", should_keep_dump=False)
 
-    csv_filename = f'S3-FIFO-{trace_name}-{cache_size}'
+    csv_filename = f'S3-FIFO-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 's3_fifo', name="S3-FIFO", should_keep_dump=False)
 
-    csv_filename = f'SIEVE-{trace_name}-{cache_size}'
+    csv_filename = f'SIEVE-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'sieve', name="SIEVE", should_keep_dump=False)
     
     

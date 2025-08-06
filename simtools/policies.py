@@ -17,6 +17,8 @@ class Policy(Enum):
     random_climber = 'latency-aware.RHC'
     arc = 'adaptive.Arc'
     frd = 'irr.Frd'
+    s3_fifo = 'two-queue.S3Fifo'
+    sieve = 'linked.Sieve'
     
     
     ca_arc = "adaptive.CA-Arc"
