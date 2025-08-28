@@ -15,25 +15,28 @@ def verifyDists(cluster_dist: List[float], num_of_generators : int):
         
 
 class NormalDist():
-    __slots__ = '_std_div', '_random_gen', 'mean', 'index', 'gen_values'
-    def __init__(self, mean: float, std_div: float):
+    __slots__ = '_std_div', '_random_gen', '_mean', 'index', 'gen_values'
+    def __init__(self, mean: float, std_div: float, seed: int):
         self._std_div = std_div
-        self._random_gen = np.random.default_rng()
+        self._random_gen = np.random.default_rng(seed)
         
-        self.mean = mean
-
-        self.refill_values()
+        self._mean = mean
+        self.gen_values = None
+        self.index = RANDOM_BATCH_SIZE
     
     def refill_values(self):
         self.index = 0
-        self.gen_values = self._random_gen.normal(self.mean, self._std_div, size=RANDOM_BATCH_SIZE)
+        self.gen_values = self._random_gen.normal(self._mean, self._std_div, size=RANDOM_BATCH_SIZE)
         
         for i in range(RANDOM_BATCH_SIZE):
             val = self.gen_values[i]
-            self.gen_values[i] = max(val, self.mean - 3 * self._std_div, 5)
+            self.gen_values[i] = max(val, self._mean - 3 * self._std_div, 5)
     
     def __str__(self):
-        return f'Normal with mean {self.mean} and sigma {self._std_div}'
+        return f'Normal with mean {self._mean} and sigma {self._std_div}'
+
+    def __repr__(self):
+        return f"N-{int(self._mean - 1.6449 * self._std_div)}-{int(self._mean + 1.6449 * self._std_div)}"
 
 
 class UniformDist():
@@ -52,6 +55,9 @@ class UniformDist():
         
     def __str__(self):
         return f'Uniform between {self._low} and {self._high}'
+    
+    def __repr__(self):
+        return f'U-{self._low}-{self._high}'
 
 
 class MultiplePeaksDist():
@@ -75,6 +81,10 @@ class MultiplePeaksDist():
         
     def __str__(self):
         return f'{len(self._values)} Peaks with values {self._values} and probabilty {self._probs}'
+    
+    def __repr__(self):
+        peaks = "-".join(self._values)
+        return f'P-{peaks}'
 
      
 class SingleValueDist():
@@ -91,3 +101,6 @@ class SingleValueDist():
     
     def __str__(self):
         return f'Single Value of {self.mean}'
+    
+    def __repr__(self):
+        return f"S-{self.mean}"

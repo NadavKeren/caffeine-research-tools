@@ -17,6 +17,7 @@ from typing import List, Dict
 from itertools import chain, islice
 
 from utils import *
+from common_data import seeds
 from latency_generators import *
 
 
@@ -105,8 +106,10 @@ def get_trace_name(fname: str):
     if ("IBMObjectStore" in fname):
         name = re.findall('Trace0[0-9][0-9]', fname)
         name = name[0]
-    elif ("Finacial" in fname or "WebSearch"):
+    elif ("Finacial" in fname or "WebSearch" in fname):
         name = fname.rstrip('.spc')
+    elif fname.endswith(".trace"):
+        name = fname.rstrip(".trace")
     
     return name.lower()
 
@@ -121,8 +124,6 @@ def main():
     parser.add_argument('-o', '--output-dir', help='The path for the newly created files', type=str, default=None)
     parser.add_argument('-t', '--contains-timestamps', help='Toggle whether the file contains timestamps', action='store_true')
     parser.add_argument('-b', '--key-base', help='The base of the key string', type=int, default=10)
-    # parser.add_argument('--time-low', type=int, required=False, help='The first dist time in two-dist generation', default=100)
-    # parser.add_argument('--time-high', type=int, required=False, help='The second dist time in two-dist generation', default=1000)
     
     args = parser.parse_args()
     
@@ -131,19 +132,14 @@ def main():
     INPUT_DIR = args.input_dir if args.input_dir else './processed'
     OUTPUT_DIR = args.output_dir if args.output_dir else './out_latencies'
     
-    dists = [([(120, 12.16), (40, 6.08)], [0.5, 0.5]), 
-            ([(120, 12.16), (340, 14), (675, 15.2)], [0.34, 0.33, 0.33])]
+    #([(120, 12.16), (40, 6.08)], [0.5, 0.5]),
+    dists = [([(120, 12.16), (340, 14), (675, 15.2)], [0.34, 0.33, 0.33])]
     
-    seeds = {'trace018' : 2867, 'trace005' : 22874, 'trace000' : 36661, 'trace045' : 4150,
-             'trace036' : 45755, 'trace012' : 32153, 'trace024' : 23516, 'trace031' : 38080,
-             'trace049' : 57461, 'trace034' : 33022, 'trace044' : 7033, 'trace029' : 38573,
-             'trace010' : 43215, 'financial1' : 282879, 'financial2' : 940359, 'websearch1': 726598,
-             'websearch2' : 31069, 'websearch3' : 273312, 'google-cluster1': 163625615}
     input_files_paths = [f for f in listdir(INPUT_DIR)]
 
     
     makedirs(OUTPUT_DIR, exist_ok=True)
-    
+    print(f'Processing files: {input_files_paths} for dists: {dists}')
     with Progress(TextColumn("[progress.description]{task.description}"),
                   BarColumn(),
                   TaskProgressColumn(),
@@ -151,7 +147,6 @@ def main():
         gen_progress = progress.add_task('[bold]Distribution', total=len(dists), start=True)
         for (params, probs) in dists:
             suffix = '-'.join(f'{chr(ord('A') + i)}-{int(mu - 1.6449*sigma)}-{int(mu + 1.6449*sigma)}' for i, (mu, sigma) in enumerate(params))
-            dist_gen = [NormalDist(mu, sigma) for (mu, sigma) in params]
 
             file_progress = progress.add_task('[bold #adc178]File progress', total=len(input_files_paths), start=True)
             
@@ -161,6 +156,7 @@ def main():
                 seed = seeds[trace_name]
                 set_name = f'IBMOS-{trace_name}-' if "IBMObjectStore" in file else trace_name
                 
+                dist_gen = [NormalDist(mu, sigma, seed) for (mu, sigma) in params]
                 addDelayAndWriteToFile(INPUT_DIR, OUTPUT_DIR, file, args.key_base, dist_gen, 
                                     probs, gen_timestamps=not args.contains_timestamps, progress=progress, verbose=args.verbose, 
                                     compress=args.compress, set_name=set_name + suffix, seed=seed)
