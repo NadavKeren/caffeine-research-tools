@@ -54,10 +54,7 @@ def calculate_file_start_and_end_times(file_path: Path) -> (int, int):
 
 def changeTimestampsAndWriteToFile(input_files: List[Path], output_path: Path):
     last_file_end = 0
-    
     timestamp = 1
-    
-    
     file_ends = list()
     
     with output_path.open('w') as outputFile, Progress() as progress:
