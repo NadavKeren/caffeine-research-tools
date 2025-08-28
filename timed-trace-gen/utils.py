@@ -27,12 +27,3 @@ def writeMetaData(fname: str, time_generators: List, cluster_dists: List[float],
     
     with open(f'{fname}_conf.json', 'w') as jsonFile:
         dump(data, jsonFile, indent=4)
-        
-        
-def compressTrace(output_file_name: str, should_remove=False):
-    with Timer(msg='compression') as t:
-        with tarfile.open(f'{output_file_name}.xz', mode="w:xz") as tar:
-            tar.add(f'{output_file_name}.trace')
-            
-    if should_remove:
-        run(['rm', f'{output_file_name}.trace'])
