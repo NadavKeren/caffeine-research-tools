@@ -36,7 +36,7 @@ def create_latency_plot(df : pl.DataFrame, output_path: Path):
     plt.xticks(tick_values)
     plt.tight_layout()
     
-    plt.save_fig(output_path.resolve())
+    plt.savefig(output_path.resolve())
 
 
 def create_pareto(directory : Path):
