@@ -13,8 +13,9 @@ from rich.progress import Progress
 filepath = Path(__file__) 
 current_dir = filepath.parent
 filepath = current_dir.resolve()
+conf_file = current_dir / 'conf.json'
 
-with open(current_dir / 'conf.json') as conf_file:
+with conf_file.open('r') as conf_file:
     local_conf = json.load(conf_file)
 caffeine_root = local_conf['caffeine_root']
 resources = local_conf['resources'] if local_conf['resources'] != '' else caffeine_root
@@ -31,7 +32,8 @@ NUM_OF_QUANTA = 16
 
 SIZES = {'trace010' : 2 ** 9, 'trace024' : 2 ** 9, 'trace031' : 2 ** 16,
          'trace045' : 2 ** 12, 'trace034' : 2 ** 14, 'trace029' : 2 ** 9,
-         'trace012' : 2 ** 10}
+         'trace012' : 2 ** 10, 'twitter-cluster1' : 2 ** 10, 'twitter-cluster3' : 2 ** 10,
+         'twitter-cluster9' : 2 ** 12, 'twitter-cluster28' : 2 ** 12}
 
 PIPELINE_CA_SETTINGS_WITHOUT_QUOTA = {"pipeline.num-of-blocks" : 3,
                                       "pipeline.blocks.0.type": "LA-LRU",
@@ -134,15 +136,27 @@ SETTINGS = {"pipeline.num-of-quanta" : NUM_OF_QUANTA,
             'full-ghost-hill-climber.adaption-multiplier' : 10}
 
 
-def get_trace_name(fname: str):
-    temp_fname = fname.lower()
-    name = re.findall('trace0[0-9][0-9]', temp_fname)
+def get_trace_name(input_file: Path):
+    if input_file.stem.startswith("twitter-cluster"):
+        match = re.match(r'^(twitter-cluster\d+)', input_file.stem)
+        trace_name = match.group(1)
+    elif input_file.stem.startswith("IBM"):
+        temp_fname = input_file.stem.lower()
+        name = re.findall('trace0[0-9][0-9]', temp_fname)
+        trace_name = name[0]
     
-    return name[0]
+    return trace_name
 
 
-def get_dists(fname: str, trace_name: str):
-    return fname.lstrip(f'IBMOS-{trace_name}').rstrip('.xz')
+def get_dists(file: Path):
+    filename = file.stem
+    
+    a_pos = filename.find('-A-')
+    if a_pos == -1:
+        return None
+
+    return filename[a_pos:]
+    
 
 
 def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str,
@@ -412,25 +426,26 @@ def main():
     
     console.print(f'[bold]Running with args:[/bold]\n{args}')
     
-    file = args.input
+    file = Path(args.input)
 
     trace_name = args.trace_name if args.trace_name else get_trace_name(file)
     cache_size = args.cache_size if args.cache_size else SIZES.get(trace_name)
-    dists = get_dists(file, trace_name)
+    dists = get_dists(file)
 
     global OUTPUT_SUFFIX
     OUTPUT_SUFFIX = f'{trace_name}-{dists}-{cache_size}'
     
     dual_trace_name = f'{trace_name}-{trace_name}'
-    dual_trace_file = f"IBMOS-{dual_trace_name}.xz"
+    dual_trace_file = f"{dual_trace_name}-{dists}.xz"
+    print(f'the output suffix will be: {OUTPUT_SUFFIX}')
     
     if args.run_dual:
         console.print(f'The dual file is: {dual_trace_file}')
 
     
     if args.run_base:
-        run_full_ghost(file, trace_name, cache_size)
-        run_all_simple(file, trace_name, cache_size)
+        run_full_ghost(file.name, trace_name, cache_size)
+        run_all_simple(file.name, trace_name, cache_size)
         
         if args.run_dual:
             run_full_ghost(dual_trace_file, dual_trace_name, cache_size)
@@ -443,11 +458,11 @@ def main():
                 progress.console.log(f"Starting round {round + 1} of {args.rounds}: {100.0 * round / args.rounds}%, seed: {seed}", style='bold #adc178')
                 
                 if args.run_single_shc:
-                    run_single_sampled(file, trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress, sample_rate=2)
+                    run_single_sampled(file.name, trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress, sample_rate=2)
                     if args.run_dual:
                         run_single_sampled(dual_trace_file, dual_trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress, sample_rate=2)
                 elif args.run_all_shc:
-                    run_sampled_all(file, trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress)
+                    run_sampled_all(file.name, trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress)
                     if args.run_dual:
                         run_sampled_all(dual_trace_file, dual_trace_name, cache_size, args.round_index_start + round + 1, seed, progress=progress)
                 else:
@@ -456,21 +471,21 @@ def main():
                 progress.update(round_progress, advance=1)
     
     if args.run_aca:
-        run_adaptive_CA(file, trace_name, cache_size)
+        run_adaptive_CA(file.name, trace_name, cache_size)
         if args.run_dual:
             run_adaptive_CA(dual_trace_file, dual_trace_name, cache_size)
     
     if args.run_grid_search:
-        run_grid_search(file, trace_name, cache_size)
+        run_grid_search(file.name, trace_name, cache_size)
         
     if args.run_old:
         run_grid_search_old(file, trace_name, cache_size)
         
     if args.run_non_ca_grid_search:
-        run_grid_search_non_ca(file, trace_name, cache_size)
+        run_grid_search_non_ca(file.name, trace_name, cache_size)
         
     if args.run_other:
-        run_other(file, trace_name, cache_size)
+        run_other(file.name, trace_name, cache_size)
         if args.run_dual:
             run_other(dual_trace_file, dual_trace_name, cache_size)
         
