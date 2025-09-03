@@ -46,10 +46,8 @@ PIPELINE_CA_SETTINGS_WITHOUT_QUOTA = {"pipeline.num-of-blocks" : 3,
                                       "pipeline.burst.aging-window-size" : 50, 
                                       "pipeline.burst.age-smoothing" : 0.0025, 
                                       "pipeline.burst.number-of-partitions" : 4, 
-                                      "pipeline.burst.type" : "normal", 
-                                      "pipeline.burst.sketch.eps" : 0.0001, 
-                                      "pipeline.burst.sketch.confidence" : 0.99}
-                                
+                                      "pipeline.burst.type" : "normal"}
+
 OLD_WCABB_SETTINGS_WITHOUT_QUOTA = {"ca-bb-window.percent-main-protected": 0.8,
                                     "ca-bb-window.burst-startegy" : "naive",
                                     "ca-bb-window.aging-window-size" : 15,
@@ -102,15 +100,15 @@ NATIVE_LFU_SETTINGS = {"pipeline.blocks.1.tiny-lfu.sketch": "count-min-4",
                        "pipeline.blocks.1.tiny-lfu.count-min-4. periodic.doorkeeper.enabled" : False}
 
 
-PIPELINE_SETTINGS_WITHOUT_QUOTA = {"pipeline.num-of-blocks" : 3,
-                                   "pipeline.blocks.0.type": "LRU",
-                                   "pipeline.blocks.1.type": "LFU",
-                                   "pipeline.blocks.2.type": "LBU",
-                                   "pipeline.burst.aging-window-size" : 50, 
-                                   "pipeline.burst.age-smoothing" : 0.0025, 
-                                   "pipeline.burst.number-of-partitions" : 4, 
-                                   "pipeline.burst.type" : "normal",
-                                   **NATIVE_LFU_SETTINGS}
+PIPELINE_SETTINGS_WITHOUT_CA_AND_QUOTA = {"pipeline.num-of-blocks" : 3,
+                                          "pipeline.blocks.0.type": "LRU",
+                                          "pipeline.blocks.1.type": "LFU",
+                                          "pipeline.blocks.2.type": "LBU",
+                                          "pipeline.burst.aging-window-size" : 50, 
+                                          "pipeline.burst.age-smoothing" : 0.0025, 
+                                          "pipeline.burst.number-of-partitions" : 4, 
+                                          "pipeline.burst.type" : "normal",
+                                          **NATIVE_LFU_SETTINGS}
 
 PIPELINE_LBU_ONLY = {"pipeline.num-of-blocks" : 1, 
                     "pipeline.num-of-quanta" : 16,
@@ -318,32 +316,27 @@ def run_grid_search(fname: str, trace_name: str, cache_size: int) -> None:
             
             progress.update(lru_progress, advance=1)
             progress.reset(lfu_progress, total=(NUM_OF_QUANTA - lru_size - 1))
-            
-
-def run_grid_search_old(fname: str, trace_name: str, cache_size: int) -> None:
+                   
+def run_grid_search_wo_burst(fname: str, trace_name: str, cache_size: int) -> None:
+    quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
+    SIZE_SETTINGS = {'pipeline.quantum-size': quantum_size}
+    
     with Progress() as progress:
-        lru_progress = progress.add_task('[bold #adc178]Old LA-LRU quota', total=16, start=True)
-        lfu_progress = progress.add_task('[bold #bedcfe]Old LA-LFU quota', total=16, start=True)
+        lru_progress = progress.add_task('[bold #adc178]LRU quota', total=16, start=True)
         for lru_size in range(NUM_OF_QUANTA + 1):
-            for lfu_size in range(NUM_OF_QUANTA - lru_size + 1):
-                percent_main = lfu_size / (lru_size + lfu_size)
-                bc_percent = (NUM_OF_QUANTA - (lru_size + lfu_size)) / NUM_OF_QUANTA
-                bc_size = NUM_OF_QUANTA - lru_size - lfu_size
-                
-                csv_filename = f'old-static-{trace_name}-{lru_size}-{lfu_size}-{bc_size}-{cache_size}'
-                run_test(fname, trace_name, cache_size, csv_filename, 'window_ca_burst_block',
-                         name=f"{lru_size}-{lfu_size}-{bc_size}", 
-                         additional_settings={**OLD_WCABB_SETTINGS_WITHOUT_QUOTA,
-                                              "ca-bb-window.percent-main": [percent_main],
-                                              "ca-bb-window.percent-burst-block": bc_percent},
-                         should_keep_dump=False,
-                         additional_csv_data={'LRU Size': lru_size, 'LFU Size': lfu_size, 'LBU Size': bc_size},
-                         progress_console=progress.console)
-                progress.update(lfu_progress, advance=1)
+            lfu_size = NUM_OF_QUANTA - lru_size
             
+            csv_filename = f'static-RF-{trace_name}-{lru_size}-{lfu_size}-{cache_size}'
+            run_test(fname, trace_name, cache_size, csv_filename, 'pipeline',
+                        name=f"{lru_size}-{lfu_size}", 
+                        additional_settings={**PIPELINE_SETTINGS_WITHOUT_BURST,
+                                            "pipeline.blocks.0.quota": lru_size, 
+                                            "pipeline.blocks.1.quota": lfu_size,
+                                            **SIZE_SETTINGS},
+                        should_keep_dump=False,
+                        additional_csv_data={'LRU Size': lru_size, 'LFU Size': lfu_size, 'LBU Size': 0},
+                        progress_console=progress.console)
             progress.update(lru_progress, advance=1)
-            progress.reset(lfu_progress, total=(NUM_OF_QUANTA - lru_size - 1))
-            
 
 def run_grid_search_non_ca(fname: str, trace_name: str, cache_size: int) -> None:
     quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
@@ -351,28 +344,22 @@ def run_grid_search_non_ca(fname: str, trace_name: str, cache_size: int) -> None
     
     with Progress() as progress:
         lru_progress = progress.add_task('[bold #adc178]LRU quota', total=16, start=True)
-        lfu_progress = progress.add_task('[bold #bedcfe]LFU quota', total=16, start=True)
         for lru_size in range(NUM_OF_QUANTA + 1):
             for lfu_size in range(NUM_OF_QUANTA - lru_size + 1):
-                percent_main = lfu_size / (lru_size + lfu_size)
-                bc_percent = (NUM_OF_QUANTA - (lru_size + lfu_size)) / NUM_OF_QUANTA
-                bc_size = NUM_OF_QUANTA - lru_size - lfu_size
+                lbu_size = NUM_OF_QUANTA - lru_size - lfu_size
                 
-                csv_filename = f'static-reg-{trace_name}-{lru_size}-{lfu_size}-{bc_size}-{cache_size}'
+                csv_filename = f'static-RFB-{trace_name}-{lru_size}-{lfu_size}-{lbu_size}-{cache_size}'
                 run_test(fname, trace_name, cache_size, csv_filename, 'pipeline',
-                         name=f"{lru_size}-{lfu_size}-{bc_size}", 
-                         additional_settings={**PIPELINE_SETTINGS_WITHOUT_QUOTA,
-                                              "pipeline.blocks.0.quota": lru_size, 
-                                              "pipeline.blocks.1.quota": lfu_size,
-                                              "pipeline.blocks.2.quota": bc_size,
-                                              **SIZE_SETTINGS},
-                         should_keep_dump=False,
-                         additional_csv_data={'LRU Size': lru_size, 'LFU Size': lfu_size, 'LBU Size': bc_size},
-                         progress_console=progress.console)
-                progress.update(lfu_progress, advance=1)
-            
-            progress.update(lru_progress, advance=1)
-            progress.reset(lfu_progress, total=(NUM_OF_QUANTA - lru_size - 1))
+                            name=f"{lru_size}-{lfu_size}-{lbu_size}", 
+                            additional_settings={**PIPELINE_SETTINGS_WITHOUT_CA_AND_QUOTA,
+                                                "pipeline.blocks.0.quota": lru_size, 
+                                                "pipeline.blocks.1.quota": lfu_size,
+                                                "pipeline.blocks.2.quota": lbu_size,
+                                                **SIZE_SETTINGS},
+                            should_keep_dump=False,
+                            additional_csv_data={'LRU Size': lru_size, 'LFU Size': lfu_size, 'LBU Size': lbu_size},
+                            progress_console=progress.console)
+                progress.update(lru_progress, advance=1)
 
 
 def run_adaptive_CA(fname: str, trace_name: str, cache_size: int) -> None:
@@ -417,10 +404,10 @@ def main():
     parser.add_argument('--run-aca', help="Run rounds of the Adaptive Cost-Aware Window-TinyLFU", action='store_true', required=False)
     parser.add_argument('--run-base', help="Run the baseline test of FGHC RFB and RF", action='store_true', required=False)
     parser.add_argument('--run-grid-search', help="Run grid search for finding the optimal static configuration", action='store_true', required=False)
-    parser.add_argument('--run-old', help="Run grid search for finding the optimal static configuration with the old implementation of WCABB", action='store_true', required=False)
     parser.add_argument('--run-other', help="Run comparison algorithms", action='store_true', required=False)
     parser.add_argument('--run-dual', help="Run all algorithms on the trace file chained twice", action='store_true', required=False)
-    parser.add_argument('--run-non-ca-grid-search', help="Run grid search with non-CA LRU and LFU", action='store_true', required=False)
+    parser.add_argument('--run-non-ca-grid-search', help="Run grid search with non-CA LRU and LFU, but with LBU", action='store_true', required=False)
+    parser.add_argument('--run-grid-search-without-lbu', help="Run grid search with CA LRU and LFU, but without LBU", action='store_true', required=False)
     
     args = parser.parse_args()
     
@@ -478,11 +465,11 @@ def main():
     if args.run_grid_search:
         run_grid_search(file.name, trace_name, cache_size)
         
-    if args.run_old:
-        run_grid_search_old(file, trace_name, cache_size)
-        
     if args.run_non_ca_grid_search:
         run_grid_search_non_ca(file.name, trace_name, cache_size)
+    
+    if args.run_grid_search_without_lbu:
+        run_grid_search_wo_burst(file.name, trace_name, cache_size)
         
     if args.run_other:
         run_other(file.name, trace_name, cache_size)
