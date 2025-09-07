@@ -33,7 +33,8 @@ NUM_OF_QUANTA = 16
 SIZES = {'trace010' : 2 ** 9, 'trace024' : 2 ** 9, 'trace031' : 2 ** 16,
          'trace045' : 2 ** 12, 'trace034' : 2 ** 14, 'trace029' : 2 ** 9,
          'trace012' : 2 ** 10, 'twitter-cluster1' : 2 ** 10, 'twitter-cluster3' : 2 ** 10,
-         'twitter-cluster9' : 2 ** 12, 'twitter-cluster28' : 2 ** 12}
+         'twitter-cluster9' : 2 ** 12, 'twitter-cluster28' : 2 ** 12, "metakv4" : 2 ** 13,
+         "metakv2" : 2 ** 13}
 
 PIPELINE_CA_SETTINGS_WITHOUT_QUOTA = {"pipeline.num-of-blocks" : 3,
                                       "pipeline.blocks.0.type": "LA-LRU",
