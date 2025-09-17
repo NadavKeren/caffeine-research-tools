@@ -29,6 +29,9 @@ def calculate_sum_of_dists(cluster_dist: List[int]) -> None:
     weights_sum = 0
     for weight in cluster_dist:
         weights_sum += weight
+    
+    if weights_sum <= 1:
+        raise ValueError(f"Weights should be integers")
 
 
 def choose_dist(key : int | str, cluster_dists: List[int]) -> int:
@@ -45,7 +48,6 @@ def choose_dist(key : int | str, cluster_dists: List[int]) -> int:
 
 def addDelayAndWriteToFile(input_path: Path, output_path: Path, key_base: int, time_generators: List, cluster_dists: List[int], 
                            progress: Progress, verbose: bool, set_name: str, time_multiplier: int = 1) -> None:
-    progress.console.print(time_multiplier)
     calculate_sum_of_dists(cluster_dists)
     current_time = datetime.datetime.now()
     timestamp = 1
@@ -58,7 +60,7 @@ def addDelayAndWriteToFile(input_path: Path, output_path: Path, key_base: int, t
     
     with output_file.open('w') as outputFile:
         with input_path.open('r') as inputFile:
-            BATCH_SIZE = 10000
+            BATCH_SIZE = 10_000
             lines = [line for line in islice(inputFile, 0, BATCH_SIZE)]
             num_of_lines += len(lines)
             
@@ -89,8 +91,9 @@ def addDelayAndWriteToFile(input_path: Path, output_path: Path, key_base: int, t
                 lines = [line for line in islice(inputFile, 0, BATCH_SIZE)]
                 num_of_lines += len(lines)
             
-                if verbose and num_of_lines % 1000000 == 0:
+                if verbose and num_of_lines % 1_000_000 == 0:
                     progress.console.print(f'[dark_orange]Added latencies to [cyan bold]{num_of_lines:,}')
+                    progress.console.print(f'[cyan]Dists: {chosen_dist_counter}')
     
     progress.console.print(f'[bold #ccd8ab]Processed f{input_path.name} with {num_of_lines:,}, splitting to {chosen_dist_counter}')
     
@@ -100,6 +103,11 @@ def get_trace_name(fname: str):
     if ("IBMObjectStore" in fname):
         name = re.findall('Trace0[0-9][0-9]', fname)
         name = name[0]
+    elif (fname.lower().startswith("metakv")):
+        match = re.match(r'^(metakv\d+)', fname.lower())
+        name = match.group(1)
+    
+    print(fname)
     
     return name.lower()
 
@@ -120,7 +128,7 @@ def main():
     INPUT_DIR = Path(args.input_dir if args.input_dir else './processed')
     OUTPUT_DIR = Path(args.output_dir if args.output_dir else './out_latencies')
     
-    input_files_paths = list(INPUT_DIR.iterdir())
+    input_files_paths = list(f for f in INPUT_DIR.iterdir() if not f.is_dir())
 
     
     OUTPUT_DIR.mkdir(exist_ok=True)
@@ -134,13 +142,16 @@ def main():
         for file in input_files_paths:
             progress.console.print(f'Processing {file}')
             trace_name = get_trace_name(file.stem)
-            if (file.stem.startswith("twitter")):
-                is_twitter = True
+            time_multiplier = 1
+            if (file.stem.startswith("twitter") or file.stem.lower().startswith("meta")):
+                time_multiplier = 1000
+                
+            progress.console.print(f'[cyan]Chose {time_multiplier} as time multiplier')
             seed = seeds[trace_name]
             set_name = f'IBMOS-{trace_name}-' if "IBMObjectStore" in file.stem else trace_name
             
-            #([(120, 12.16), (40, 6.08)], [0.5, 0.5]),
-            dists = [([NormalDist(120, 12.16, seed), NormalDist(340, 14, seed), NormalDist(675, 15.2, seed)], [34, 33, 33])]
+            dists = [([NormalDist(120, 12.16, seed), NormalDist(40, 6.08, seed)], [50, 50])]
+            # dists = [([NormalDist(120, 12.16, seed), NormalDist(340, 14, seed), NormalDist(675, 15.2, seed)], [34, 33, 33])]
             gen_progress = progress.add_task('[bold #adc178]Configuration', total=len(dists), start=True)
             for (dist_gens, probs) in dists:
                 suffix = '-'.join(f'{chr(ord('A') + i)}-{repr(dist)}' for i, dist in enumerate(dist_gens))
@@ -148,7 +159,7 @@ def main():
                 
                 addDelayAndWriteToFile(file, OUTPUT_DIR, args.key_base, dist_gens, 
                                        probs, progress=progress, verbose=args.verbose, 
-                                       set_name=set_name + suffix, time_multiplier = 1000 if is_twitter else 1)
+                                       set_name=set_name + '-' + suffix, time_multiplier = time_multiplier)
                 progress.update(gen_progress, advance=1)
                 
             progress.remove_task(gen_progress)
