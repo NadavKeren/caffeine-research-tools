@@ -1,0 +1,36 @@
+{
+  "trace": {
+    "total_ticks": 75000,
+    "tick_time_ms": 1000,
+    "latency": 1000
+  },
+  "items": {
+    "recency": 250000,
+    "frequency": 100,
+    "burstiness": 100,
+    "one_hit_wonders": 150000
+  },
+  "recency": {
+    "min_occur_len": 24,
+    "max_occur_len": 33,
+    "min_time_between_req": 700,
+    "max_time_between_req": 900
+  },
+  "frequency": {
+    "min_first_occur_time_ticks": 1,
+    "max_first_occur_time_ticks": 100,
+    "min_time_between_req_factor": 1.0,
+    "max_time_between_req_factor": 1.1
+  },
+  "burstiness": {
+    "min_len": 900,
+    "max_len": 1100,
+    "min_bursts": 70,
+    "max_bursts": 80,
+    "time_between_bursts_divisor": 60,
+    "max_first_occur_divisor": 100,
+    "min_last_occur_factor": 95,
+    "min_last_occur_divisor": 100,
+    "max_last_occur_offset": 1500
+  }
+}
