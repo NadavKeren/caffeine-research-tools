@@ -1,6 +1,7 @@
 import argparse
 import simulatools
 import re
+from itertools import permutations
 from os import urandom
 from pathlib import Path
 import json
@@ -101,6 +102,13 @@ FGHC_SETTINGS = {'sampled-hill-climber.sample-order-factor' : 0,
                  'sampled-hill-climber.adaption-multiplier' : 10}
 
 SEED_PATH = 'random-seed'
+
+BLOCK_EXTRA_SETTINGS = {
+    "LA-LRU": {"decay-factor": 1, "max-lists": 10},
+    "LA-LFU": {"decay-factor": 1, "max-lists": 10},
+    "LBU": {},
+}
+BLOCK_SHORT_NAMES = {"LA-LRU": "LRU", "LA-LFU": "LFU", "LBU": "LBU"}
 
 
 SETTINGS = {"pipeline.num-of-quanta" : NUM_OF_QUANTA,
@@ -313,6 +321,54 @@ def run_grid_search(fname: str, trace_name: str, cache_size: int) -> None:
             progress.reset(lfu_progress, total=(NUM_OF_QUANTA - lru_size - 1))
 
                   
+def run_reorder_grid_search(fname: str, trace_name: str, cache_size: int) -> None:
+    quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
+    SIZE_SETTINGS = {'pipeline.quantum-size': quantum_size}
+
+    with Progress() as progress:
+        for block_order in permutations(["LA-LRU", "LA-LFU", "LBU"]):
+            order_label = "-".join(BLOCK_SHORT_NAMES[t] for t in block_order)
+            first_type, second_type, third_type = block_order
+
+            order_base_settings = {"pipeline.num-of-blocks": 3}
+            for i, btype in enumerate(block_order):
+                order_base_settings[f"pipeline.blocks.{i}.type"] = btype
+                for k, v in BLOCK_EXTRA_SETTINGS[btype].items():
+                    order_base_settings[f"pipeline.blocks.{i}.{k}"] = v
+
+            first_block_progress = progress.add_task(f'[bold #adc178]{order_label} {BLOCK_SHORT_NAMES[first_type]} quota', total=NUM_OF_QUANTA, start=True)
+            second_block_progress = progress.add_task(f'[bold #bedcfe]{order_label} {BLOCK_SHORT_NAMES[second_type]} quota', total=NUM_OF_QUANTA, start=True)
+
+            for first_quota in range(NUM_OF_QUANTA + 1):
+                for second_quota in range(NUM_OF_QUANTA - first_quota + 1):
+                    third_quota = NUM_OF_QUANTA - (first_quota + second_quota)
+                    csv_filename = f'static-{order_label}-{first_quota}-{second_quota}-{third_quota}-{OUTPUT_SUFFIX}'
+                    quota_settings = {
+                        "pipeline.blocks.0.quota": first_quota,
+                        "pipeline.blocks.1.quota": second_quota,
+                        "pipeline.blocks.2.quota": third_quota,
+                    }
+                    csv_data = {
+                        BLOCK_SHORT_NAMES[first_type] + ' Size': first_quota,
+                        BLOCK_SHORT_NAMES[second_type] + ' Size': second_quota,
+                        BLOCK_SHORT_NAMES[third_type] + ' Size': third_quota,
+                        'Order': order_label,
+                    }
+                    run_test(fname, trace_name, cache_size, csv_filename, 'pipeline',
+                             name=f"{order_label}-{first_quota}-{second_quota}-{third_quota}",
+                             additional_settings={**order_base_settings, **quota_settings, **SIZE_SETTINGS},
+                             should_keep_dump=False,
+                             additional_csv_data=csv_data,
+                             progress_console=progress.console)
+                    progress.update(second_block_progress, advance=1)
+
+                progress.update(first_block_progress, advance=1)
+                progress.reset(second_block_progress, total=(NUM_OF_QUANTA - first_quota - 1))
+
+            progress.remove_task(first_block_progress)
+            progress.remove_task(second_block_progress)
+
+
 def run_adaptive_CA(fname: str, trace_name: str, cache_size: int) -> None:
     csv_filename = f'ACA-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'adaptive_ca',
@@ -355,6 +411,7 @@ def main():
     parser.add_argument('--run-aca', help="Run rounds of the Adaptive Cost-Aware Window-TinyLFU", action='store_true', required=False)
     parser.add_argument('--run-base', help="Run the baseline test of FGHC RFB and RF", action='store_true', required=False)
     parser.add_argument('--run-grid-search', help="Run grid search for finding the optimal static configuration", action='store_true', required=False)
+    parser.add_argument('--reorder-grid-search', help="Run grid search over all 6 permutations of LRU/LFU/LBU block order", action='store_true', required=False)
     parser.add_argument('--run-other', help="Run comparison algorithms, not including LHD and LRB", action='store_true', required=False)
 
     args = parser.parse_args()
@@ -421,6 +478,9 @@ def main():
     
     if args.run_grid_search:
         run_grid_search(file.name, trace_name, cache_size)
+
+    if args.reorder_grid_search:
+        run_reorder_grid_search(file.name, trace_name, cache_size)
                 
     if args.run_other:
         run_other(file.name, trace_name, cache_size)
