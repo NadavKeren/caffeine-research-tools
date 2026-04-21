@@ -1,5 +1,5 @@
-from os.path import *
-from os import path, listdir, makedirs
+import argparse
+from pathlib import Path
 
 from typing import List
 
@@ -7,8 +7,7 @@ from rich import print, pretty
 from rich.progress import Progress
 pretty.install()
 
-INPUT_DIR = './object_storage_processed'
-OUTPUT_DIR = './object_storage_LRB'
+OUTPUT_DIR = Path('./object_storage_LRB')
 
 MAX_INT64 = 2 ** 63 - 1
 
@@ -22,11 +21,11 @@ def _parseLine(entry: str) -> str:
     return f"{time} {object_id} 1"
 
 
-def _processFile(fname: str, progress: Progress) -> None:
-    with open(f'{INPUT_DIR}/{fname}', encoding='utf-8',errors='replace') as original_format_file:
+def _processFile(file: Path, output_path: Path, progress: Progress) -> None:
+    with file.open('r', encoding='utf-8',errors='replace') as original_format_file:
         lines_processed = 0
         lines_removed = 0
-        with open(f'{OUTPUT_DIR}/{fname}','w') as LRB_format_file:
+        with output_path.open('w') as LRB_format_file:
             line = original_format_file.readline()
             while line:
                 lines_processed += 1
@@ -36,14 +35,16 @@ def _processFile(fname: str, progress: Progress) -> None:
         progress.console.print(f"[green]Processed {lines_processed} lines")
 
                 
-def processFiles(files : List[str]):
+def processFiles(files : List[Path]):
     with Progress() as progress:
         files_progress = progress.add_task('[bold #bedcfe]Files processed', total=len(files), start=True)
         progress.console.print(f'[bold yellow]Processing the files: [bold cyan]{files}\n')
         for file in files:
-            if not path.exists(f'{OUTPUT_DIR}/{file}'):
+            output_path = OUTPUT_DIR / f'{file.stem}-LRB.trace'
+            print(output_path.resolve())
+            if not output_path.exists():
                 progress.console.print(f'[orange]Start processing [purple]{file}')
-                _processFile(file, progress)
+                _processFile(file, output_path, progress)
                     
                 progress.console.print(f'[green]Done processing: [purple]{file}')
                 progress.update(files_progress, advance=1)
@@ -52,10 +53,18 @@ def processFiles(files : List[str]):
     
     
 def main():
-    input_files_paths = [f for f in listdir(INPUT_DIR) 
-                         if isfile(join(INPUT_DIR, f))]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input', help="The input dir of all the files to convert", type=str, required=True)
     
-    makedirs(OUTPUT_DIR, exist_ok=True)
+    args = parser.parse_args()
+    input_dir = Path(args.input)
+    
+    if not input_dir.exists() or not input_dir.is_dir():
+        print("[red bold]Error: invalid input dir")
+    
+    input_files_paths = list(input_dir.glob('*.trace'))
+    
+    OUTPUT_DIR.mkdir(exist_ok=True)
     
     processFiles(input_files_paths)
 

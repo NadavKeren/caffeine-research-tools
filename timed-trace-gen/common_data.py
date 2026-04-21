@@ -4,7 +4,7 @@ seeds = {'trace018' : 2867, 'trace005' : 22874, 'trace000' : 36661, 'trace045' :
          'trace010' : 43215, 'financial1' : 282879, 'financial2' : 940359, 'websearch1': 726598,
          'websearch2' : 31069, 'websearch3' : 273312, 'google-cluster1': 163625615, 
          'twitter-cluster1' : 31238019, "twitter-cluster3" : 76934554, "twitter-cluster9" : 44722549,
-         'twitter-cluster28' : 50779077}
+         'twitter-cluster28' : 50779077, "metakv2" : 516352, "metakv4" : 335607}
 
 
 

@@ -6,7 +6,7 @@ from itertools import islice
 from typing import Iterator, List
 
 pretty.install()
-BATCH_SIZE = 10000
+BATCH_SIZE = 10_000
 
 def batched_file_reader(file_path: Path) -> Iterator[List[str]]:
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -20,7 +20,7 @@ def batched_file_reader(file_path: Path) -> Iterator[List[str]]:
                 yield batch
 
 
-def process_batches(trace_file: Path, marked_file: Path, output_path: Path) -> None:
+def process_batches(trace_file: Path, marked_file: Path, output_path: Path, multiplier: int) -> None:
     with open(output_path, 'w', encoding='utf-8') as output_file:
         trace_file_batches = batched_file_reader(trace_file)
         marked_file_batches = batched_file_reader(marked_file)
@@ -39,6 +39,9 @@ def process_batches(trace_file: Path, marked_file: Path, output_path: Path) -> N
                 line_num = total_processed + 1
                 time1, id1, hit_penalty, miss_penalty = line1.split()
                 time2, id2, is_hit = line2.split()
+                time1 = int(time1)
+                time2 = int(time2)
+                time2 *= multiplier
                 
                 if time1 != time2:
                     print(f"[bold red]Error: Line {line_num} - timestamp mismatch: {time1} != {time2}")
@@ -49,20 +52,20 @@ def process_batches(trace_file: Path, marked_file: Path, output_path: Path) -> N
                 
                 total_processed += 1
             
-            if batch_num % 10 == 0:
-                print(f"[yellow]Processed {total_processed} lines...")
+            if batch_num % 100 == 0:
+                print(f"[yellow]Processed {total_processed:_} lines...")
         
         remaining1 = list(islice(trace_file_batches, 1))
         remaining2 = list(islice(marked_file_batches, 1))
         
         if remaining1:
-            print(f"[bold red]Error: The trace file has more lines after line {total_processed}")
+            print(f"[bold red]Error: The trace file has more lines after line {total_processed:_}")
             exit(1)
         if remaining2:
-            print(f"[bold red]Error: The marked file has more lines after line {total_processed}")
+            print(f"[bold red]Error: The marked file has more lines after line {total_processed:_}")
             exit(1)
     
-    print(f"[bold green]Successfully processed {total_processed} lines.")
+    print(f"[bold green]Successfully processed {total_processed:_} lines.")
     print(f"[bold cyan]Output written to: {output_path}")
 
 
@@ -86,6 +89,9 @@ def main():
         print(f"Error: trace_file does not exist: {trace_file}")
         sys.exit(1)
     
+    # multiplier = 1 if not marked_file_path.stem.startswith("LRB") else 1000
+    # multiplier = 1000
+    multiplier = 1
     if not marked_file_path.exists():
         print(f"Error: marked_file does not exist: {marked_file_path}")
         sys.exit(1)
@@ -96,7 +102,7 @@ def main():
     print(f"Input file 2: {marked_file_path}")
     print(f"Output file: {output_path}")
     
-    process_batches(trace_file, marked_file_path, output_path)
+    process_batches(trace_file, marked_file_path, output_path, multiplier)
 
 
 if __name__ == "__main__":

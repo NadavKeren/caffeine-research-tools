@@ -36,7 +36,13 @@ def create_latency_plot(df : pl.DataFrame, output_path: Path):
     plt.xticks(tick_values)
     plt.tight_layout()
     
-    plt.savefig(output_path.resolve())
+    plt.savefig(str(output_path.parent / output_path.stem) + "-logscale.pdf")
+    
+    plt.xscale('linear')
+    tick_values = [1 << i for i in range(7, 18)]
+    plt.tight_layout()
+    plt.xticks(tick_values)
+    plt.savefig(str(output_path.parent / output_path.stem) + "-linear.pdf")
 
 
 def create_pareto(directory : Path):

@@ -74,7 +74,7 @@ def changeTimestampsAndWriteToFile(input_files: List[Path], output_path: Path):
                         written_time = int(written_time)
                         key = int(key)
                         hit_penalty = int(hit_penalty)
-                        miss_penalty = int(miss_penalty.strip(' \n'))
+                        miss_penalty = float(miss_penalty.strip(' \n'))
                             
                         timestamp = written_time - file_start + last_file_end + 1
                         num_of_lines += 1

@@ -1,0 +1,66 @@
+{
+    "clusters data": [
+        {
+            "probability": 0.5,
+            "dist info": "Normal with mean 120 and sigma 12.16"
+        },
+        {
+            "probability": 0.5,
+            "dist info": "Normal with mean 40 and sigma 6.08"
+        }
+    ],
+    "latencies data": [
+        {
+            "histogram": [
+                0,
+                10124057,
+                9244601,
+                0,
+                0
+            ],
+            "bins": [
+                0.0,
+                10.0,
+                100.0,
+                1000.0,
+                10000.0,
+                Infinity
+            ]
+        }
+    ],
+    "occurences data": [
+        {
+            "histogram": [
+                168351,
+                283666,
+                32980,
+                158930,
+                1040937,
+                253125,
+                110179,
+                27412,
+                21064,
+                18481,
+                7822,
+                225,
+                8
+            ],
+            "bins": [
+                1.0,
+                2.0,
+                3.0,
+                4.0,
+                5.0,
+                10.0,
+                20.0,
+                30.0,
+                40.0,
+                50.0,
+                100.0,
+                1000.0,
+                10000.0,
+                Infinity
+            ]
+        }
+    ]
+}

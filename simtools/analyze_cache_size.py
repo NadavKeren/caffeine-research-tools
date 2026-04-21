@@ -74,6 +74,9 @@ def main():
     elif input_file.stem.startswith("twitter-cluster"):
         match = re.match(r'^(twitter-cluster\d+)', input_file.stem)
         trace_name = match.group(1)
+    elif input_file.stem.startswith('metakv'):
+        match = re.match(r'^(metakv\d+)', input_file.stem)
+        trace_name = match.group(1)
         
     output_dir = Path(args.output_path) / trace_name
     output_dir.mkdir(exist_ok=True)
