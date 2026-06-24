@@ -369,6 +369,37 @@ def run_reorder_grid_search(fname: str, trace_name: str, cache_size: int) -> Non
             progress.remove_task(second_block_progress)
 
 
+def run_adaptive_pipeline_reordered(fname: str, trace_name: str, cache_size: int) -> None:
+    quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
+    SIZE_SETTINGS = {'pipeline.quantum-size': quantum_size}
+
+    # Equal start quotas matching PIPELINE_EQUAL_START_SETTINGS distribution
+    EQUAL_QUOTAS = [5, 6, 5]
+
+    with Progress() as progress:
+        order_progress = progress.add_task('[bold #adc178]Block orderings', total=6, start=True)
+
+        for block_order in permutations(["LA-LRU", "LA-LFU", "LBU"]):
+            order_label = "-".join(BLOCK_SHORT_NAMES[t] for t in block_order)
+
+            order_settings = {"pipeline.num-of-blocks": 3}
+            for i, btype in enumerate(block_order):
+                order_settings[f"pipeline.blocks.{i}.type"] = btype
+                for k, v in BLOCK_EXTRA_SETTINGS[btype].items():
+                    order_settings[f"pipeline.blocks.{i}.{k}"] = v
+                order_settings[f"pipeline.blocks.{i}.quota"] = EQUAL_QUOTAS[i]
+
+            csv_filename = f'FGHC-reordered-{order_label}-{OUTPUT_SUFFIX}'
+            run_test(fname, trace_name, cache_size, csv_filename, 'sampled_ghost',
+                     name=f'FGHC-{order_label}',
+                     additional_settings={**order_settings, **FGHC_SETTINGS, **SIZE_SETTINGS},
+                     should_keep_dump=True,
+                     additional_csv_data={'Order': order_label},
+                     progress_console=progress.console)
+
+            progress.update(order_progress, advance=1)
+
+
 def run_adaptive_CA(fname: str, trace_name: str, cache_size: int) -> None:
     csv_filename = f'ACA-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'adaptive_ca',
@@ -412,6 +443,7 @@ def main():
     parser.add_argument('--run-base', help="Run the baseline test of FGHC RFB and RF", action='store_true', required=False)
     parser.add_argument('--run-grid-search', help="Run grid search for finding the optimal static configuration", action='store_true', required=False)
     parser.add_argument('--reorder-grid-search', help="Run grid search over all 6 permutations of LRU/LFU/LBU block order", action='store_true', required=False)
+    parser.add_argument('--run-adaptive-pipeline-reordered', help="Run FGHC on all 6 permutations of LRU/LFU/LBU block order with equal starting quotas", action='store_true', required=False)
     parser.add_argument('--run-other', help="Run comparison algorithms, not including LHD and LRB", action='store_true', required=False)
 
     args = parser.parse_args()
@@ -481,6 +513,9 @@ def main():
 
     if args.reorder_grid_search:
         run_reorder_grid_search(file.name, trace_name, cache_size)
+
+    if args.run_adaptive_pipeline_reordered:
+        run_adaptive_pipeline_reordered(file.name, trace_name, cache_size)
                 
     if args.run_other:
         run_other(file.name, trace_name, cache_size)
