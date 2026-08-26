@@ -101,6 +101,16 @@ PIPELINE_LBU_ONLY = {"pipeline.num-of-blocks" : 1,
 FGHC_SETTINGS = {'sampled-hill-climber.sample-order-factor' : 0, 
                  'sampled-hill-climber.adaption-multiplier' : 10}
 
+#* The Exploring SHC (ESHC): the SHC plus one extra ghost cache placed at a random
+#* configuration at least min-swap-distance quantum swaps away, re-drawn every
+#* warmup-timeframes + evaluation-timeframes timeframes. max-rounds of -1 means unlimited.
+ESHC_SETTINGS = {'exploring-sampled-hill-climber.sample-order-factor' : 0,
+                 'exploring-sampled-hill-climber.adaption-multiplier' : 10,
+                 'exploring-sampled-hill-climber.warmup-timeframes' : 2,
+                 'exploring-sampled-hill-climber.evaluation-timeframes' : 8,
+                 'exploring-sampled-hill-climber.min-swap-distance' : 6,
+                 'exploring-sampled-hill-climber.max-rounds' : -1}
+
 SEED_PATH = 'random-seed'
 
 BLOCK_EXTRA_SETTINGS = {
@@ -382,6 +392,54 @@ def run_adaptive_grid_search(fname: str, trace_name: str, cache_size: int) -> No
             progress.remove_task(second_block_progress)
 
 
+def run_exploring_grid_search(fname: str, trace_name: str, cache_size: int) -> None:
+    quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
+    SIZE_SETTINGS = {'pipeline.quantum-size': quantum_size}
+
+    with Progress() as progress:
+        for block_order in permutations(["LA-LRU", "LA-LFU", "LBU"]):
+            order_label = "-".join(BLOCK_SHORT_NAMES[t] for t in block_order)
+            first_type, second_type, third_type = block_order
+
+            order_base_settings = {"pipeline.num-of-blocks": 3}
+            for i, btype in enumerate(block_order):
+                order_base_settings[f"pipeline.blocks.{i}.type"] = btype
+                for k, v in BLOCK_EXTRA_SETTINGS[btype].items():
+                    order_base_settings[f"pipeline.blocks.{i}.{k}"] = v
+
+            first_block_progress = progress.add_task(f'[bold #adc178]{order_label} {BLOCK_SHORT_NAMES[first_type]} start quota', total=NUM_OF_QUANTA, start=True)
+            second_block_progress = progress.add_task(f'[bold #bedcfe]{order_label} {BLOCK_SHORT_NAMES[second_type]} start quota', total=NUM_OF_QUANTA, start=True)
+
+            for first_quota in range(NUM_OF_QUANTA + 1):
+                for second_quota in range(NUM_OF_QUANTA - first_quota + 1):
+                    third_quota = NUM_OF_QUANTA - (first_quota + second_quota)
+                    csv_filename = f'ESHC-start-{order_label}-{first_quota}-{second_quota}-{third_quota}-{OUTPUT_SUFFIX}'
+                    quota_settings = {
+                        "pipeline.blocks.0.quota": first_quota,
+                        "pipeline.blocks.1.quota": second_quota,
+                        "pipeline.blocks.2.quota": third_quota,
+                    }
+                    csv_data = {
+                        BLOCK_SHORT_NAMES[first_type] + ' Start': first_quota,
+                        BLOCK_SHORT_NAMES[second_type] + ' Start': second_quota,
+                        BLOCK_SHORT_NAMES[third_type] + ' Start': third_quota,
+                        'Order': order_label,
+                    }
+                    run_test(fname, trace_name, cache_size, csv_filename, 'exploring_ghost',
+                             name=f"start-{order_label}-{first_quota}-{second_quota}-{third_quota}",
+                             additional_settings={**order_base_settings, **ESHC_SETTINGS,
+                                                  **quota_settings, **SIZE_SETTINGS},
+                             should_keep_dump=True,
+                             additional_csv_data=csv_data,
+                             progress_console=progress.console)
+                    progress.update(second_block_progress, advance=1)
+
+                progress.update(first_block_progress, advance=1)
+                progress.reset(second_block_progress, total=(NUM_OF_QUANTA - first_quota - 1))
+
+            progress.remove_task(first_block_progress)
+            progress.remove_task(second_block_progress)
+
 def run_reorder_grid_search(fname: str, trace_name: str, cache_size: int) -> None:
     quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
     SIZE_SETTINGS = {'pipeline.quantum-size': quantum_size}
@@ -504,6 +562,7 @@ def main():
     parser.add_argument('--run-base', help="Run the baseline test of FGHC RFB and RF", action='store_true', required=False)
     parser.add_argument('--run-grid-search', help="Run grid search for finding the optimal static configuration", action='store_true', required=False)
     parser.add_argument('--run-adaptive-grid-search', help="Run the adaptive hill climber (FGHC) starting from every possible quota configuration", action='store_true', required=False)
+    parser.add_argument('--run-exploring-grid-search', help="Run the exploring hill climber (ESHC) starting from every possible quota configuration", action='store_true', required=False)
     parser.add_argument('--reorder-grid-search', help="Run grid search over all 6 permutations of LRU/LFU/LBU block order", action='store_true', required=False)
     parser.add_argument('--run-adaptive-pipeline-reordered', help="Run FGHC on all 6 permutations of LRU/LFU/LBU block order with equal starting quotas", action='store_true', required=False)
     parser.add_argument('--run-other', help="Run comparison algorithms, not including LHD and LRB", action='store_true', required=False)
@@ -575,6 +634,9 @@ def main():
 
     if args.run_adaptive_grid_search:
         run_adaptive_grid_search(file.name, trace_name, cache_size)
+
+    if args.run_exploring_grid_search:
+        run_exploring_grid_search(file.name, trace_name, cache_size)
 
     if args.reorder_grid_search:
         run_reorder_grid_search(file.name, trace_name, cache_size)
