@@ -13,6 +13,7 @@ class Policy(Enum):
     adaptive_ca = 'sketch.ACA'
     pipeline = 'latency-aware.Pipeline'
     sampled_ghost = 'latency-aware.SampledHillClimber'
+    exploring_ghost = 'latency-aware.ESHC'
     mock = 'latency-aware.Mockup'
     random_climber = 'latency-aware.RHC'
     arc = 'adaptive.Arc'
