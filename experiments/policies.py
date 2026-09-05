@@ -16,6 +16,7 @@ class Policy(Enum):
     exploring_ghost = 'latency-aware.ESHC'
     mock = 'latency-aware.Mockup'
     random_climber = 'latency-aware.RHC'
+    statistics_based = 'latency-aware.SBC'
     arc = 'adaptive.Arc'
     frd = 'irr.Frd'
     s3_fifo = 'two-queue.S3Fifo'
