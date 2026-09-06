@@ -457,11 +457,15 @@ def run_statistics_grid_search(fname: str, trace_name: str, cache_size: int) -> 
                 for k, v in BLOCK_EXTRA_SETTINGS[btype].items():
                     order_base_settings[f"pipeline.blocks.{i}.{k}"] = v
 
-            first_block_progress = progress.add_task(f'[bold #adc178]{order_label} {BLOCK_SHORT_NAMES[first_type]} start quota', total=NUM_OF_QUANTA, start=True)
-            second_block_progress = progress.add_task(f'[bold #bedcfe]{order_label} {BLOCK_SHORT_NAMES[second_type]} start quota', total=NUM_OF_QUANTA, start=True)
+            # The SBC needs every block to hold at least a single quantum, an empty block has no
+            # statistics to be scored by, thus each block starts with a quota of one or more.
+            first_block_progress = progress.add_task(f'[bold #adc178]{order_label} {BLOCK_SHORT_NAMES[first_type]} start quota', total=(NUM_OF_QUANTA - 2), start=True)
+            second_block_progress = progress.add_task(f'[bold #bedcfe]{order_label} {BLOCK_SHORT_NAMES[second_type]} start quota', total=(NUM_OF_QUANTA - 2), start=True)
 
-            for first_quota in range(NUM_OF_QUANTA + 1):
-                for second_quota in range(NUM_OF_QUANTA - first_quota + 1):
+            for first_quota in range(1, NUM_OF_QUANTA - 1):
+                progress.reset(second_block_progress, total=(NUM_OF_QUANTA - first_quota - 1))
+
+                for second_quota in range(1, NUM_OF_QUANTA - first_quota):
                     third_quota = NUM_OF_QUANTA - (first_quota + second_quota)
                     csv_filename = f'SBC-start-{order_label}-{first_quota}-{second_quota}-{third_quota}-{OUTPUT_SUFFIX}'
                     quota_settings = {
@@ -485,7 +489,6 @@ def run_statistics_grid_search(fname: str, trace_name: str, cache_size: int) -> 
                     progress.update(second_block_progress, advance=1)
 
                 progress.update(first_block_progress, advance=1)
-                progress.reset(second_block_progress, total=(NUM_OF_QUANTA - first_quota - 1))
 
             progress.remove_task(first_block_progress)
             progress.remove_task(second_block_progress)
