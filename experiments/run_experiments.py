@@ -157,7 +157,8 @@ def get_dists(file: Path):
 
 def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str,
              algorithm : str, should_keep_dump : bool = False, additional_settings = None,
-             name = None, additional_csv_data = None, progress_console = None) -> None:
+             name = None, additional_csv_data = None, progress_console = None,
+             force: bool = False) -> None:
     print(output_filename)
     if progress_console:
         if name is None:
@@ -167,7 +168,7 @@ def run_test(fname: str, trace_name: str, cache_size: int, output_filename : str
     else:
         console.log(f'[bold #a98467]Running {algorithm} on trace: {trace_name}, size: {cache_size}' + f' Name: {name}' if name is not None else "")
     
-    if (Path(f'{RESULTS_DIR}/{output_filename}.csv').exists()): # * Skipping tests with existing results        
+    if (not force and Path(f'{RESULTS_DIR}/{output_filename}.csv').exists()): # * Skipping tests with existing results
         return
     
     settings = SETTINGS if additional_settings is None else {**SETTINGS, **additional_settings}
@@ -573,6 +574,238 @@ def run_adaptive_pipeline_reordered(fname: str, trace_name: str, cache_size: int
             progress.update(order_progress, advance=1)
 
 
+#* ---------------------------------------------------------------------------
+#* RankMap: the resolution sweep
+#* ---------------------------------------------------------------------------
+#*
+#* RankMap projects every candidate allocation from the shadow rankings instead of running
+#* ghost caches, so the allocation quantum can be made much finer than the 16 quanta the ghost
+#* climbers are limited to. This sweep runs the same pipeline at quanta of 2, 4, 8, ... items.
+#*
+#* The shadow rankings depend only on the trace, the cache size and the block types - not on how
+#* the cache is split between the blocks. One recording therefore serves every resolution, so the
+#* sweep records it once on the cheapest run and replays it for all the others.
+#*
+#* Note the block types: RankMap ranks LRU, LFU and LBU. The LA-LRU / LA-LFU blocks the ghost
+#* climber experiments use have no shadow ranking implemented yet, so this is a different pipeline
+#* and its numbers are not directly comparable to the FGHC ones.
+
+#* How many cache-capacities worth of requests pass between adaptation decisions. The sweep varies
+#* this as a second axis: a short interval adapts quickly but scores each candidate on less evidence.
+RANKMAP_DECISION_MULTIPLIERS = [2, 5, 10, 20]
+RANKMAP_HALF_LIFE_MULTIPLIER = 50
+
+#* Roughly a hundred bytes of allocation tree per candidate, so this keeps it to a few hundred MB.
+RANKMAP_MAX_CANDIDATES = 2_000_000
+
+RANKMAP_BLOCK_TYPES = ["LRU", "LFU", "LBU"]
+
+RANKMAP_BURST_SETTINGS = {"pipeline.burst.aging-window-size" : 50,
+                          "pipeline.burst.age-smoothing" : 0.0025,
+                          "pipeline.burst.number-of-partitions" : 4,
+                          "pipeline.burst.type" : "normal",
+                          "pipeline.burst.sketch.eps" : 0.0001,
+                          "pipeline.burst.sketch.confidence" : 0.99}
+
+
+def rankmap_lfu_probation_size(cache_size: int) -> int:
+    """
+    The LFU shadow board's probation segment, pinned for the whole sweep. LfuBlock keeps one quantum
+    on probation, so left to follow the quantum every resolution would have a different LFU board and
+    need its own recording. One quantum of the default NUM_OF_QUANTA grid is the board the coarse
+    RankMap design (and the FGHC experiments' LfuBlock) uses.
+    """
+    return max(1, cache_size // NUM_OF_QUANTA)
+
+
+def rank_data_dir(cache_size: int) -> Path:
+    """One directory per (trace, cache size), so 'has this been recorded yet' is a directory check."""
+    return Path(RESULTS_DIR) / 'rank-data' / f'{OUTPUT_SUFFIX}'
+
+
+def rankmap_snapshot_interval(cache_size: int, decision_multipliers: list) -> int:
+    """
+    Board snapshots are only read at a decision, so the recording only has to carry them often
+    enough that every decision interval in the sweep lands on one. Every interval is a multiple of
+    the capacity times the greatest common divisor of the multipliers, and taking the gcd keeps the
+    recording as small as it can be while still serving all of them from one file.
+    """
+    from math import gcd
+    from functools import reduce
+
+    return reduce(gcd, decision_multipliers) * cache_size
+
+
+def rankmap_recording(recordings: Path, cache_size: int, snapshot_interval: int):
+    """
+    A recording at this size that serves the whole sweep: its snapshot interval has to divide every
+    decision interval, which is exactly dividing their gcd. RankMap picks the recording itself, by
+    the same rule plus the fingerprint of the boards, so this only decides whether to make one.
+
+    A recording is a pair made by one run: the .rankdata ranks and snapshots, which is all the
+    hit-ratio objective needs, and the .benefit latency windows beside it. Without both it is not
+    a recording.
+    """
+    if not recordings.is_dir():
+        return None
+
+    prefix = f'boards.C{cache_size}.{"-".join(RANKMAP_BLOCK_TYPES)}.S'
+    for recording in sorted(recordings.glob(f'{prefix}*.rankdata')):
+        interval = recording.name[len(prefix):].split('.', 1)[0]
+        if (interval.isdigit() and snapshot_interval % int(interval) == 0
+                and recording.with_suffix('.benefit').is_file()):
+            return recording
+
+    return None
+
+
+def even_quotas(num_of_quanta: int, num_of_blocks: int) -> list:
+    """An even split, handing any remainder to the middle blocks - 16 over 3 gives 5, 6, 5."""
+    quotas = [num_of_quanta // num_of_blocks] * num_of_blocks
+    for i in range(num_of_quanta % num_of_blocks):
+        quotas[(num_of_blocks // 2 + i) % num_of_blocks] += 1
+
+    return quotas
+
+
+def rankmap_resolutions(cache_size: int, num_of_blocks: int, max_candidates: int) -> list:
+    """
+    The feasible quanta sizes, finest first: 2 items, 4 items, 8 items and so on.
+
+    Every candidate allocation is scored on every request, and the number of them is the
+    compositions of the quanta count into the blocks, so the finest resolutions stop being
+    affordable well before the quantum reaches one item on a large cache.
+    """
+    from math import comb
+
+    resolutions = []
+    quantum = 2
+    while quantum <= cache_size:
+        if cache_size % quantum == 0:
+            quanta = cache_size // quantum
+            if quanta >= num_of_blocks:
+                candidates = comb(quanta + num_of_blocks - 1, num_of_blocks - 1)
+                if candidates <= max_candidates:
+                    resolutions.append((quantum, quanta, candidates))
+        quantum *= 2
+
+    return resolutions
+
+
+def rankmap_settings(cache_size: int, quantum_size: int, num_of_quanta: int, objective: str,
+                     decision_multiplier: int, snapshot_interval: int,
+                     precompute_mode: str, decision_log: str) -> dict:
+    quotas = even_quotas(num_of_quanta, len(RANKMAP_BLOCK_TYPES))
+
+    settings = {"pipeline.num-of-blocks" : len(RANKMAP_BLOCK_TYPES),
+                "pipeline.num-of-quanta" : num_of_quanta,
+                "pipeline.quantum-size" : quantum_size,
+                **RANKMAP_BURST_SETTINGS,
+                'rank-map.objective' : objective,
+                'rank-map.decision-multiplier' : decision_multiplier,
+                'rank-map.half-life-multiplier' : RANKMAP_HALF_LIFE_MULTIPLIER,
+                'rank-map.validate-oracle' : False,
+                'rank-map.lfu-board-probation-size' : rankmap_lfu_probation_size(cache_size),
+                'rank-map.decision-log' : decision_log,
+                'rank-map.precompute.mode' : precompute_mode,
+                'rank-map.precompute.directory' : str(rank_data_dir(cache_size)),
+                'rank-map.precompute.snapshot-interval' : snapshot_interval}
+
+    for idx, block_type in enumerate(RANKMAP_BLOCK_TYPES):
+        settings[f"pipeline.blocks.{idx}.type"] = block_type
+        settings[f"pipeline.blocks.{idx}.quota"] = quotas[idx]
+        for key, value in BLOCK_EXTRA_SETTINGS.get(block_type, {}).items():
+            settings[f"pipeline.blocks.{idx}.{key}"] = value
+
+    return settings
+
+
+def run_rankmap_one(fname: str, trace_name: str, cache_size: int, quantum_size: int,
+                    num_of_quanta: int, candidates: int, objective: str,
+                    decision_multiplier: int, snapshot_interval: int, precompute_mode: str,
+                    force: bool, progress_console = None, csv_filename: str = None) -> None:
+    if csv_filename is None:
+        csv_filename = f'RankMap-{objective}-q{quantum_size}-d{decision_multiplier}-{OUTPUT_SUFFIX}'
+
+    settings = rankmap_settings(cache_size, quantum_size, num_of_quanta, objective,
+                                decision_multiplier, snapshot_interval, precompute_mode,
+                                decision_log=f'{RESULTS_DIR}/{csv_filename}.decisions.csv')
+
+    run_test(fname, trace_name, cache_size, csv_filename, 'rank_map',
+             name=f'{objective}-q{quantum_size}-d{decision_multiplier}',
+             additional_settings=settings,
+             additional_csv_data={'Quantum Size' : quantum_size,
+                                  'Num Of Quanta' : num_of_quanta,
+                                  'Candidates' : candidates,
+                                  'Objective' : objective,
+                                  'Decision Multiplier' : decision_multiplier,
+                                  'Decision Interval' : decision_multiplier * cache_size,
+                                  'Blocks' : '-'.join(RANKMAP_BLOCK_TYPES)},
+             should_keep_dump=False,
+             force=force,
+             progress_console=progress_console)
+
+
+def run_rankmap_resolution_sweep(fname: str, trace_name: str, cache_size: int,
+                                 objectives: list, decision_multipliers: list,
+                                 max_candidates: int) -> None:
+    num_of_blocks = len(RANKMAP_BLOCK_TYPES)
+    snapshot_interval = rankmap_snapshot_interval(cache_size, decision_multipliers)
+    resolutions = rankmap_resolutions(cache_size, num_of_blocks, max_candidates)
+
+    if not resolutions:
+        console.print(f'[bold red]No feasible RankMap resolution for size {cache_size} '
+                      f'within {max_candidates} candidates')
+        return
+
+    finest = resolutions[0]
+    coarsest = resolutions[-1]
+    console.log(f'[bold #a98467]RankMap resolutions for size {cache_size}: '
+                f'{finest[0]} items ({finest[2]:,} candidates) up to '
+                f'{coarsest[0]} items ({coarsest[2]:,} candidates)')
+
+    recordings = rank_data_dir(cache_size)
+    recording = rankmap_recording(recordings, cache_size, snapshot_interval)
+
+    #* Recording is a run of its own, not one of the results, and it records for both objectives at
+    #* once: the ranks for hit ratio and the latency windows for latency, in two files. Every result - the coarsest resolution
+    #* included - then replays that one recording, so they all score against identical rankings and
+    #* each run only reads the parts it needs: the snapshots at its own decisions, and as many depth
+    #* boundaries as its quanta have. The coarsest resolution has the smallest allocation tree, so it
+    #* is the cheapest configuration to drive the recording with.
+    if recording is not None:
+        console.log(f'[bold #adc178]Reusing the shadow rankings in {recording}')
+    else:
+        quantum_size, num_of_quanta, candidates = coarsest
+        console.log(f'[bold #adc178]Recording the shadow rankings into {recordings} '
+                    f'(snapshots every {snapshot_interval} requests)')
+        #* The CSV lands beside the recording, as a record of the run that made it, and out of the
+        #* results so nothing mistakes it for a sweep point.
+        run_rankmap_one(fname, trace_name, cache_size, quantum_size, num_of_quanta, candidates,
+                        'hit-ratio', snapshot_interval // cache_size, snapshot_interval,
+                        precompute_mode='write', force=True,
+                        csv_filename=str(Path('rank-data') / OUTPUT_SUFFIX / f'recording-S{snapshot_interval}'))
+
+        recording = rankmap_recording(recordings, cache_size, snapshot_interval)
+        if recording is None:
+            console.print(f'[bold red]The recording run left no recording in {recordings}')
+            exit(1)
+
+    with Progress() as progress:
+        total = len(resolutions) * len(objectives) * len(decision_multipliers)
+        sweep = progress.add_task('[bold #bedcfe]RankMap resolutions', total=total, start=True)
+
+        for objective in objectives:
+            for decision_multiplier in decision_multipliers:
+                #* Finest first, so the expensive end is reached while the recording is already warm.
+                for quantum_size, num_of_quanta, candidates in resolutions:
+                    run_rankmap_one(fname, trace_name, cache_size, quantum_size, num_of_quanta,
+                                    candidates, objective, decision_multiplier, snapshot_interval,
+                                    precompute_mode='read', force=False,
+                                    progress_console=progress.console)
+                    progress.update(sweep, advance=1)
+
+
 def run_adaptive_CA(fname: str, trace_name: str, cache_size: int) -> None:
     csv_filename = f'ACA-{OUTPUT_SUFFIX}'
     run_test(fname, trace_name, cache_size, csv_filename, 'adaptive_ca',
@@ -621,6 +854,10 @@ def main():
     parser.add_argument('--reorder-grid-search', help="Run grid search over all 6 permutations of LRU/LFU/LBU block order", action='store_true', required=False)
     parser.add_argument('--run-adaptive-pipeline-reordered', help="Run FGHC on all 6 permutations of LRU/LFU/LBU block order with equal starting quotas", action='store_true', required=False)
     parser.add_argument('--run-other', help="Run comparison algorithms, not including LHD and LRB", action='store_true', required=False)
+    parser.add_argument('--run-rankmap-resolutions', help="Run RankMap over quanta of 2, 4, 8, ... items, recording the shadow rankings once and replaying them", action='store_true', required=False)
+    parser.add_argument('--rankmap-objective', help="What RankMap optimizes in the resolution sweep", choices=['latency', 'hit-ratio', 'both'], default='latency', required=False)
+    parser.add_argument('--rankmap-max-candidates', help="Skip resolutions with more candidate allocations than this", type=int, default=RANKMAP_MAX_CANDIDATES, required=False)
+    parser.add_argument('--rankmap-decision-multipliers', help="Comma separated decision intervals to sweep, each as a multiple of the cache size", type=str, default=','.join(str(m) for m in RANKMAP_DECISION_MULTIPLIERS), required=False)
 
     args = parser.parse_args()
 
@@ -702,6 +939,12 @@ def main():
     if args.run_adaptive_pipeline_reordered:
         run_adaptive_pipeline_reordered(file.name, trace_name, cache_size)
                 
+    if args.run_rankmap_resolutions:
+        objectives = ['latency', 'hit-ratio'] if args.rankmap_objective == 'both' else [args.rankmap_objective]
+        decision_multipliers = sorted({int(m) for m in args.rankmap_decision_multipliers.split(',') if m.strip()})
+        run_rankmap_resolution_sweep(file.name, trace_name, cache_size, objectives,
+                                     decision_multipliers, args.rankmap_max_candidates)
+
     if args.run_other:
         run_other(file.name, trace_name, cache_size)
         
