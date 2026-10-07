@@ -598,7 +598,16 @@ RANKMAP_HALF_LIFE_MULTIPLIER = 50
 #* Roughly a hundred bytes of allocation tree per candidate, so this keeps it to a few hundred MB.
 RANKMAP_MAX_CANDIDATES = 2_000_000
 
-RANKMAP_BLOCK_TYPES = ["LRU", "LFU", "LBU"]
+#* The boards follow the objective: the latency-aware blocks when optimizing latency, since those
+#* are the ones that optimize it, and the plain ones for hit ratio. LA-LRU is ranked by recency
+#* alone (CRA's score has no fixed order) and LA-LFU by frequency times latency.
+RANKMAP_BLOCK_TYPES = {'latency' : ["LA-LRU", "LA-LFU", "LBU"],
+                       'hit-ratio' : ["LRU", "LFU", "LBU"]}
+RANKMAP_NUM_OF_BLOCKS = 3
+
+#* How the latency objective values a request: 'window', 'item-cumulative' or 'item-ewma' (see
+#* rank-map.benefit.estimator in reference.conf). The estimator comparison sweeps all of them.
+RANKMAP_BENEFIT_ESTIMATOR = 'item-ewma'
 
 RANKMAP_BURST_SETTINGS = {"pipeline.burst.aging-window-size" : 50,
                           "pipeline.burst.age-smoothing" : 0.0025,
@@ -636,7 +645,7 @@ def rankmap_snapshot_interval(cache_size: int, decision_multipliers: list) -> in
     return reduce(gcd, decision_multipliers) * cache_size
 
 
-def rankmap_recording(recordings: Path, cache_size: int, snapshot_interval: int):
+def rankmap_recording(recordings: Path, cache_size: int, snapshot_interval: int, block_types: list):
     """
     A recording at this size that serves the whole sweep: its snapshot interval has to divide every
     decision interval, which is exactly dividing their gcd. RankMap picks the recording itself, by
@@ -649,7 +658,7 @@ def rankmap_recording(recordings: Path, cache_size: int, snapshot_interval: int)
     if not recordings.is_dir():
         return None
 
-    prefix = f'boards.C{cache_size}.{"-".join(RANKMAP_BLOCK_TYPES)}.S'
+    prefix = f'boards.C{cache_size}.{"-".join(block_types)}.S'
     for recording in sorted(recordings.glob(f'{prefix}*.rankdata')):
         interval = recording.name[len(prefix):].split('.', 1)[0]
         if (interval.isdigit() and snapshot_interval % int(interval) == 0
@@ -695,13 +704,15 @@ def rankmap_resolutions(cache_size: int, num_of_blocks: int, max_candidates: int
 def rankmap_settings(cache_size: int, quantum_size: int, num_of_quanta: int, objective: str,
                      decision_multiplier: int, snapshot_interval: int,
                      precompute_mode: str, decision_log: str) -> dict:
-    quotas = even_quotas(num_of_quanta, len(RANKMAP_BLOCK_TYPES))
+    block_types = RANKMAP_BLOCK_TYPES[objective]
+    quotas = even_quotas(num_of_quanta, len(block_types))
 
-    settings = {"pipeline.num-of-blocks" : len(RANKMAP_BLOCK_TYPES),
+    settings = {"pipeline.num-of-blocks" : len(block_types),
                 "pipeline.num-of-quanta" : num_of_quanta,
                 "pipeline.quantum-size" : quantum_size,
                 **RANKMAP_BURST_SETTINGS,
                 'rank-map.objective' : objective,
+                'rank-map.benefit.estimator' : RANKMAP_BENEFIT_ESTIMATOR,
                 'rank-map.decision-multiplier' : decision_multiplier,
                 'rank-map.half-life-multiplier' : RANKMAP_HALF_LIFE_MULTIPLIER,
                 'rank-map.validate-oracle' : False,
@@ -711,7 +722,7 @@ def rankmap_settings(cache_size: int, quantum_size: int, num_of_quanta: int, obj
                 'rank-map.precompute.directory' : str(rank_data_dir(cache_size)),
                 'rank-map.precompute.snapshot-interval' : snapshot_interval}
 
-    for idx, block_type in enumerate(RANKMAP_BLOCK_TYPES):
+    for idx, block_type in enumerate(block_types):
         settings[f"pipeline.blocks.{idx}.type"] = block_type
         settings[f"pipeline.blocks.{idx}.quota"] = quotas[idx]
         for key, value in BLOCK_EXTRA_SETTINGS.get(block_type, {}).items():
@@ -723,13 +734,16 @@ def rankmap_settings(cache_size: int, quantum_size: int, num_of_quanta: int, obj
 def run_rankmap_one(fname: str, trace_name: str, cache_size: int, quantum_size: int,
                     num_of_quanta: int, candidates: int, objective: str,
                     decision_multiplier: int, snapshot_interval: int, precompute_mode: str,
-                    force: bool, progress_console = None, csv_filename: str = None) -> None:
+                    force: bool, progress_console = None, csv_filename: str = None,
+                    extra_settings: dict = None, extra_csv_data: dict = None) -> None:
     if csv_filename is None:
         csv_filename = f'RankMap-{objective}-q{quantum_size}-d{decision_multiplier}-{OUTPUT_SUFFIX}'
 
     settings = rankmap_settings(cache_size, quantum_size, num_of_quanta, objective,
                                 decision_multiplier, snapshot_interval, precompute_mode,
                                 decision_log=f'{RESULTS_DIR}/{csv_filename}.decisions.csv')
+    if extra_settings:
+        settings.update(extra_settings)
 
     run_test(fname, trace_name, cache_size, csv_filename, 'rank_map',
              name=f'{objective}-q{quantum_size}-d{decision_multiplier}',
@@ -740,16 +754,55 @@ def run_rankmap_one(fname: str, trace_name: str, cache_size: int, quantum_size: 
                                   'Objective' : objective,
                                   'Decision Multiplier' : decision_multiplier,
                                   'Decision Interval' : decision_multiplier * cache_size,
-                                  'Blocks' : '-'.join(RANKMAP_BLOCK_TYPES)},
+                                  'Blocks' : '-'.join(RANKMAP_BLOCK_TYPES[objective]),
+                                  'Benefit Estimator' : settings['rank-map.benefit.estimator'],
+                                  **(extra_csv_data or {})},
              should_keep_dump=False,
              force=force,
              progress_console=progress_console)
 
 
+def ensure_rankmap_recording(fname: str, trace_name: str, cache_size: int, snapshot_interval: int,
+                             quantum_size: int, num_of_quanta: int, candidates: int,
+                             objective: str) -> Path:
+    """
+    Makes sure there is a recording of the shadow rankings that serves decisions every multiple of
+    snapshot_interval, recording one if there is none. The configuration that drives the recording
+    run only decides how long it takes; the boards do not depend on it.
+    """
+    recordings = rank_data_dir(cache_size)
+    recording = rankmap_recording(recordings, cache_size, snapshot_interval, RANKMAP_BLOCK_TYPES[objective])
+
+    #* Recording is a run of its own, not one of the results, and it records for both objectives at
+    #* once: the ranks for hit ratio and the latency windows for latency, in two files. Every result
+    #* then replays that one recording, so they all score against identical rankings and each run
+    #* only reads the parts it needs: the snapshots at its own decisions, and as many depth
+    #* boundaries as its quanta have. Callers drive it with their cheapest configuration, the one
+    #* with the smallest allocation tree.
+    if recording is not None:
+        console.log(f'[bold #adc178]Reusing the shadow rankings in {recording}')
+    else:
+        console.log(f'[bold #adc178]Recording the shadow rankings into {recordings} '
+                    f'(snapshots every {snapshot_interval} requests)')
+        #* The CSV lands beside the recording, as a record of the run that made it, and out of the
+        #* results so nothing mistakes it for a sweep point.
+        run_rankmap_one(fname, trace_name, cache_size, quantum_size, num_of_quanta, candidates,
+                        objective, snapshot_interval // cache_size, snapshot_interval,
+                        precompute_mode='write', force=True,
+                        csv_filename=str(Path('rank-data') / OUTPUT_SUFFIX / f'recording-{objective}-S{snapshot_interval}'))
+
+        recording = rankmap_recording(recordings, cache_size, snapshot_interval, RANKMAP_BLOCK_TYPES[objective])
+        if recording is None:
+            console.print(f'[bold red]The recording run left no recording in {recordings}')
+            exit(1)
+
+    return recording
+
+
 def run_rankmap_resolution_sweep(fname: str, trace_name: str, cache_size: int,
                                  objectives: list, decision_multipliers: list,
                                  max_candidates: int) -> None:
-    num_of_blocks = len(RANKMAP_BLOCK_TYPES)
+    num_of_blocks = RANKMAP_NUM_OF_BLOCKS
     snapshot_interval = rankmap_snapshot_interval(cache_size, decision_multipliers)
     resolutions = rankmap_resolutions(cache_size, num_of_blocks, max_candidates)
 
@@ -764,32 +817,11 @@ def run_rankmap_resolution_sweep(fname: str, trace_name: str, cache_size: int,
                 f'{finest[0]} items ({finest[2]:,} candidates) up to '
                 f'{coarsest[0]} items ({coarsest[2]:,} candidates)')
 
-    recordings = rank_data_dir(cache_size)
-    recording = rankmap_recording(recordings, cache_size, snapshot_interval)
-
-    #* Recording is a run of its own, not one of the results, and it records for both objectives at
-    #* once: the ranks for hit ratio and the latency windows for latency, in two files. Every result - the coarsest resolution
-    #* included - then replays that one recording, so they all score against identical rankings and
-    #* each run only reads the parts it needs: the snapshots at its own decisions, and as many depth
-    #* boundaries as its quanta have. The coarsest resolution has the smallest allocation tree, so it
-    #* is the cheapest configuration to drive the recording with.
-    if recording is not None:
-        console.log(f'[bold #adc178]Reusing the shadow rankings in {recording}')
-    else:
-        quantum_size, num_of_quanta, candidates = coarsest
-        console.log(f'[bold #adc178]Recording the shadow rankings into {recordings} '
-                    f'(snapshots every {snapshot_interval} requests)')
-        #* The CSV lands beside the recording, as a record of the run that made it, and out of the
-        #* results so nothing mistakes it for a sweep point.
-        run_rankmap_one(fname, trace_name, cache_size, quantum_size, num_of_quanta, candidates,
-                        'hit-ratio', snapshot_interval // cache_size, snapshot_interval,
-                        precompute_mode='write', force=True,
-                        csv_filename=str(Path('rank-data') / OUTPUT_SUFFIX / f'recording-S{snapshot_interval}'))
-
-        recording = rankmap_recording(recordings, cache_size, snapshot_interval)
-        if recording is None:
-            console.print(f'[bold red]The recording run left no recording in {recordings}')
-            exit(1)
+    #* Each objective ranks its own block types, so each has its own recording.
+    for objective in objectives:
+        ensure_rankmap_recording(fname, trace_name, cache_size, snapshot_interval,
+                                 quantum_size=coarsest[0], num_of_quanta=coarsest[1], candidates=coarsest[2],
+                                 objective=objective)
 
     with Progress() as progress:
         total = len(resolutions) * len(objectives) * len(decision_multipliers)
@@ -804,6 +836,134 @@ def run_rankmap_resolution_sweep(fname: str, trace_name: str, cache_size: int,
                                     precompute_mode='read', force=False,
                                     progress_console=progress.console)
                     progress.update(sweep, advance=1)
+
+
+#* ---------------------------------------------------------------------------
+#* RankMap: which latency benefit estimator predicts real latency best
+#* ---------------------------------------------------------------------------
+#*
+#* The latency objective credits candidates with an estimated benefit per request. To see which
+#* estimator tracks the real latency, every allocation is also run as a static pipeline of the
+#* same blocks, and each estimator's lifetime projection is compared against those runs:
+#* correlation over all candidates, and the regret of picking the projected best one.
+
+RANKMAP_BENEFIT_ESTIMATORS = ['window', 'item-cumulative', 'item-ewma']
+
+
+def rankmap_compositions(num_of_quanta: int, num_of_blocks: int):
+    """Every quota vector over the blocks summing to num_of_quanta, in the allocation tree's order."""
+    if num_of_blocks == 1:
+        yield (num_of_quanta,)
+        return
+
+    for first in range(num_of_quanta + 1):
+        for rest in rankmap_compositions(num_of_quanta - first, num_of_blocks - 1):
+            yield (first, *rest)
+
+
+def rankmap_static_csv(quotas: tuple, num_of_quanta: int) -> str:
+    return f'static-rankmap-q{num_of_quanta}-{"-".join(str(q) for q in quotas)}-{OUTPUT_SUFFIX}'
+
+
+def run_rankmap_static_grid(fname: str, trace_name: str, cache_size: int, num_of_quanta: int) -> None:
+    """
+    The ground truth: a static pipeline of RankMap's latency block types at every allocation.
+    """
+    quantum_size = cache_size // num_of_quanta
+    block_types = RANKMAP_BLOCK_TYPES['latency']
+    allocations = list(rankmap_compositions(num_of_quanta, len(block_types)))
+
+    with Progress() as progress:
+        grid = progress.add_task('[bold #adc178]Static allocations', total=len(allocations), start=True)
+
+        for quotas in allocations:
+            settings = {"pipeline.num-of-blocks" : len(block_types),
+                        "pipeline.num-of-quanta" : num_of_quanta,
+                        "pipeline.quantum-size" : quantum_size,
+                        **RANKMAP_BURST_SETTINGS}
+            for idx, block_type in enumerate(block_types):
+                settings[f"pipeline.blocks.{idx}.type"] = block_type
+                settings[f"pipeline.blocks.{idx}.quota"] = quotas[idx]
+                for key, value in BLOCK_EXTRA_SETTINGS.get(block_type, {}).items():
+                    settings[f"pipeline.blocks.{idx}.{key}"] = value
+
+            run_test(fname, trace_name, cache_size, rankmap_static_csv(quotas, num_of_quanta), 'pipeline',
+                     name='-'.join(str(q) for q in quotas),
+                     additional_settings=settings,
+                     additional_csv_data={f'{block_type} Size' : quotas[idx]
+                                          for idx, block_type in enumerate(block_types)},
+                     progress_console=progress.console)
+            progress.update(grid, advance=1)
+
+
+def run_rankmap_estimator_sweep(fname: str, trace_name: str, cache_size: int,
+                                num_of_quanta: int, decision_multiplier: int) -> None:
+    from math import comb
+
+    quantum_size = cache_size // num_of_quanta
+    candidates = comb(num_of_quanta + RANKMAP_NUM_OF_BLOCKS - 1, RANKMAP_NUM_OF_BLOCKS - 1)
+    snapshot_interval = rankmap_snapshot_interval(cache_size, [decision_multiplier])
+
+    run_rankmap_static_grid(fname, trace_name, cache_size, num_of_quanta)
+    ensure_rankmap_recording(fname, trace_name, cache_size, snapshot_interval,
+                             quantum_size, num_of_quanta, candidates, objective='latency')
+
+    dumps = {}
+    for estimator in RANKMAP_BENEFIT_ESTIMATORS:
+        csv_filename = f'RankMap-latency-{estimator}-q{quantum_size}-d{decision_multiplier}-{OUTPUT_SUFFIX}'
+        dumps[estimator] = Path(RESULTS_DIR) / f'{csv_filename}.scores.csv'
+
+        run_rankmap_one(fname, trace_name, cache_size, quantum_size, num_of_quanta, candidates,
+                        'latency', decision_multiplier, snapshot_interval,
+                        precompute_mode='read', force=not dumps[estimator].exists(),
+                        csv_filename=csv_filename,
+                        extra_settings={'rank-map.benefit.estimator' : estimator,
+                                        'rank-map.score-dump' : str(dumps[estimator])})
+
+    analyze_rankmap_estimators(cache_size, num_of_quanta, quantum_size, decision_multiplier, dumps)
+
+
+def analyze_rankmap_estimators(cache_size: int, num_of_quanta: int, quantum_size: int,
+                               decision_multiplier: int, dumps: dict) -> None:
+    """
+    One row per estimator. The projection is a benefit, so a good estimator correlates positively
+    with the latency the static runs saved, which is minus their average penalty: every static run
+    serves the same requests, so the average penalty orders them exactly as the total does.
+    """
+    import pandas as pd
+
+    quota_columns = [f'quota{idx}' for idx in range(RANKMAP_NUM_OF_BLOCKS)]
+
+    static_rows = []
+    for quotas in rankmap_compositions(num_of_quanta, RANKMAP_NUM_OF_BLOCKS):
+        result = pd.read_csv(f'{RESULTS_DIR}/{rankmap_static_csv(quotas, num_of_quanta)}.csv')
+        static_rows.append({**dict(zip(quota_columns, quotas)),
+                            'static_penalty' : result['Average Penalty'].iloc[0]})
+    static = pd.DataFrame(static_rows)
+    best_static = static['static_penalty'].min()
+
+    rows = []
+    for estimator, dump in dumps.items():
+        merged = pd.read_csv(dump).merge(static, on=quota_columns, validate='one_to_one')
+        saved = -merged['static_penalty']
+        picked = merged.loc[merged['lifetime'].idxmax()]
+
+        adaptive = pd.read_csv(f'{RESULTS_DIR}/RankMap-latency-{estimator}-q{quantum_size}-d{decision_multiplier}-{OUTPUT_SUFFIX}.csv')
+
+        rows.append({'Estimator' : estimator,
+                     'Spearman' : merged['lifetime'].corr(saved, method='spearman'),
+                     'Pearson' : merged['lifetime'].corr(saved, method='pearson'),
+                     'Projected Best' : '-'.join(str(int(picked[c])) for c in quota_columns),
+                     'Regret' : picked['static_penalty'] - best_static,
+                     'Adaptive Penalty' : adaptive['Average Penalty'].iloc[0],
+                     'Best Static Penalty' : best_static,
+                     'Best Static' : '-'.join(str(int(v)) for v in
+                                             static.loc[static['static_penalty'].idxmin(), quota_columns])})
+
+    summary = pd.DataFrame(rows)
+    summary['Cache Size'] = cache_size
+    summary.to_csv(f'{RESULTS_DIR}/RankMap-estimators-q{quantum_size}-d{decision_multiplier}-{OUTPUT_SUFFIX}.csv', index=False)
+    console.print(summary.to_string(index=False))
 
 
 def run_adaptive_CA(fname: str, trace_name: str, cache_size: int) -> None:
@@ -857,6 +1017,9 @@ def main():
     parser.add_argument('--run-rankmap-resolutions', help="Run RankMap over quanta of 2, 4, 8, ... items, recording the shadow rankings once and replaying them", action='store_true', required=False)
     parser.add_argument('--rankmap-objective', help="What RankMap optimizes in the resolution sweep", choices=['latency', 'hit-ratio', 'both'], default='latency', required=False)
     parser.add_argument('--rankmap-max-candidates', help="Skip resolutions with more candidate allocations than this", type=int, default=RANKMAP_MAX_CANDIDATES, required=False)
+    parser.add_argument('--run-rankmap-estimators', help="Compare RankMap's latency benefit estimators against static pipelines at every allocation", action='store_true', required=False)
+    parser.add_argument('--rankmap-grid-quanta', help="Quanta of the static grid and the RankMap runs in the estimator comparison", type=int, default=NUM_OF_QUANTA, required=False)
+    parser.add_argument('--rankmap-estimator-decision-multiplier', help="The decision interval of the estimator comparison, as a multiple of the cache size", type=int, default=10, required=False)
     parser.add_argument('--rankmap-decision-multipliers', help="Comma separated decision intervals to sweep, each as a multiple of the cache size", type=str, default=','.join(str(m) for m in RANKMAP_DECISION_MULTIPLIERS), required=False)
 
     args = parser.parse_args()
@@ -944,6 +1107,10 @@ def main():
         decision_multipliers = sorted({int(m) for m in args.rankmap_decision_multipliers.split(',') if m.strip()})
         run_rankmap_resolution_sweep(file.name, trace_name, cache_size, objectives,
                                      decision_multipliers, args.rankmap_max_candidates)
+
+    if args.run_rankmap_estimators:
+        run_rankmap_estimator_sweep(file.name, trace_name, cache_size, args.rankmap_grid_quanta,
+                                    args.rankmap_estimator_decision_multiplier)
 
     if args.run_other:
         run_other(file.name, trace_name, cache_size)
