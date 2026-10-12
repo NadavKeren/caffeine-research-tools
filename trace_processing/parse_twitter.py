@@ -6,11 +6,12 @@ from pathlib import Path
 from itertools import islice
 from typing import List, Iterator
 from rich import print, pretty
+from trace_io import open_trace
 pretty.install()
 
 # Shortening the traces to be either 200mil requests or 10 hours long.
 MAX_REQUESTS_TO_PROCESS = 200000000
-MAX_TIME_TO_PROCESS = 36000
+MAX_TIME_TO_PROCESS = 36000 * 1000  # In milliseconds, same as the output timestamps
 
 
 def read_batches(reader: csv.DictReader, batch_size: int) -> Iterator[List[dict]]:
@@ -37,7 +38,7 @@ def process_csv_batches(input_file: Path, output_file: Path, batch_size: int = 1
     batch_number = 0
     last_timestamp = 0
     
-    with input_file.open('r', newline='', encoding='utf-8') as infile, \
+    with open_trace(input_file, newline='', encoding='utf-8') as infile, \
          output_file.open('w', newline='', encoding='utf-8') as outfile:
              
         fieldnames = ['timestamp', 'key', 'key_size', 'value_size', 'client_id', 'operation', 'TTL']
@@ -84,7 +85,7 @@ def extract_cluster_number(filename: str) -> str | None:
 
 def main():
     parser = argparse.ArgumentParser(description='Parse Twitter trace file')
-    parser.add_argument('-i', '--input-file', required=True, type=str, help='Path to input trace file')
+    parser.add_argument('-i', '--input-file', required=True, type=str, help='Path to input trace file (plain, .zst / .xz compressed, or a tar archive such as .tgz)')
     parser.add_argument('-o', '--output-path', required=True, type=str, help='Output directory path')
     parser.add_argument('--batch-size', type=int, required=False, default=10000,
                         help='Number of rows to process at a time (default: 10000)')

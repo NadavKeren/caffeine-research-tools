@@ -4,6 +4,8 @@ from pathlib import Path
 
 from rich import pretty, print
 
+from trace_io import open_trace
+
 pretty.install()
 
 def parseLine(entry: str) -> str | None:
@@ -22,7 +24,7 @@ def parseLine(entry: str) -> str | None:
         return None
 
 def processFile(input_path: Path, output_path: Path) -> None:
-    with input_path.open(encoding='utf-8', errors='replace') as raw_file:
+    with open_trace(input_path, encoding='utf-8', errors='replace') as raw_file:
         lines_processed = 0
         lines_removed = 0
         with output_path.open('w') as output_file:
@@ -52,7 +54,7 @@ def extract_metakv_version(filename: str) -> str | None:
 
 def main():
     parser = argparse.ArgumentParser(description='Parse metaKV trace file')
-    parser.add_argument('-i', '--input-file', help='Input trace file', type=str, required=True)
+    parser.add_argument('-i', '--input-file', help='Input trace file (plain, .zst / .xz compressed, or a tar archive such as .tgz)', type=str, required=True)
     parser.add_argument('-o', '--output-path', help='Output directory path', type=str, required=True)
 
     args = parser.parse_args()
