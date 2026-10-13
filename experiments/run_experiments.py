@@ -50,7 +50,17 @@ PIPELINE_CA_SETTINGS_WITHOUT_QUOTA = {"pipeline.num-of-blocks" : 3,
                                       "pipeline.burst.number-of-partitions" : 4, 
                                       "pipeline.burst.type" : "normal"}
 
-#* To the above config, we add the quotas per block
+#* The same pipeline with the plain LRU and LFU blocks, which optimize the hit ratio rather than latency
+PIPELINE_HR_SETTINGS_WITHOUT_QUOTA = {"pipeline.num-of-blocks" : 3,
+                                      "pipeline.blocks.0.type": "LRU",
+                                      "pipeline.blocks.1.type": "LFU",
+                                      "pipeline.blocks.2.type": "LBU",
+                                      "pipeline.burst.aging-window-size" : 50, 
+                                      "pipeline.burst.age-smoothing" : 0.0025, 
+                                      "pipeline.burst.number-of-partitions" : 4, 
+                                      "pipeline.burst.type" : "normal"}
+
+#* To the above configs, we add the quotas per block
 
 PIPELINE_EQUAL_START_SETTINGS = {**PIPELINE_CA_SETTINGS_WITHOUT_QUOTA,
                                  "pipeline.blocks.0.quota": 5, 
@@ -319,20 +329,27 @@ def run_all_simple(fname: str, trace_name: str, cache_size: int) -> None:
             name='LBU', additional_settings={**PIPELINE_LBU_ONLY, **SIZE_SETTINGS}, should_keep_dump=False)
 
 
-def run_grid_search(fname: str, trace_name: str, cache_size: int) -> None:
+def run_grid_search(fname: str, trace_name: str, cache_size: int, hit_ratio: bool = False) -> None:
+    """
+    Every static allocation of the LRU, LFU and LBU blocks. By default these are the latency-aware
+    blocks; with hit_ratio the plain LRU and LFU ones, to find the best hit ratio instead.
+    """
     quantum_size = cache_size / SETTINGS["pipeline.num-of-quanta"]
     SIZE_SETTINGS = {'pipeline.quantum-size': quantum_size}
+    pipeline_settings = PIPELINE_HR_SETTINGS_WITHOUT_QUOTA if hit_ratio else PIPELINE_CA_SETTINGS_WITHOUT_QUOTA
+    csv_prefix = 'static-hr' if hit_ratio else 'static'
+    lru_type, lfu_type = pipeline_settings["pipeline.blocks.0.type"], pipeline_settings["pipeline.blocks.1.type"]
     
     with Progress() as progress:
-        lru_progress = progress.add_task('[bold #adc178]LA-LRU quota', total=16, start=True)
-        lfu_progress = progress.add_task('[bold #bedcfe]LA-LFU quota', total=16, start=True)
+        lru_progress = progress.add_task(f'[bold #adc178]{lru_type} quota', total=16, start=True)
+        lfu_progress = progress.add_task(f'[bold #bedcfe]{lfu_type} quota', total=16, start=True)
         for lru_size in range(NUM_OF_QUANTA + 1):
             for lfu_size in range(NUM_OF_QUANTA - lru_size + 1):
                 bc_size = NUM_OF_QUANTA - (lru_size + lfu_size)
-                csv_filename = f'static-{lru_size}-{lfu_size}-{bc_size}-{OUTPUT_SUFFIX}'
+                csv_filename = f'{csv_prefix}-{lru_size}-{lfu_size}-{bc_size}-{OUTPUT_SUFFIX}'
                 run_test(fname, trace_name, cache_size, csv_filename, 'pipeline',
                          name=f"{lru_size}-{lfu_size}-{bc_size}", 
-                         additional_settings={**PIPELINE_CA_SETTINGS_WITHOUT_QUOTA,
+                         additional_settings={**pipeline_settings,
                                               "pipeline.blocks.0.quota": lru_size, 
                                               "pipeline.blocks.1.quota": lfu_size,
                                               "pipeline.blocks.2.quota": bc_size,
@@ -1008,6 +1025,7 @@ def main():
     parser.add_argument('--run-aca', help="Run rounds of the Adaptive Cost-Aware Window-TinyLFU", action='store_true', required=False)
     parser.add_argument('--run-base', help="Run the baseline test of FGHC RFB and RF", action='store_true', required=False)
     parser.add_argument('--run-grid-search', help="Run grid search for finding the optimal static configuration", action='store_true', required=False)
+    parser.add_argument('--run-hit-ratio-grid-search', help="Run grid search for the static configuration with the best hit ratio, using the plain LRU and LFU blocks", action='store_true', required=False)
     parser.add_argument('--run-adaptive-grid-search', help="Run the adaptive hill climber (FGHC) starting from every possible quota configuration", action='store_true', required=False)
     parser.add_argument('--run-exploring-grid-search', help="Run the exploring hill climber (ESHC) starting from every possible quota configuration", action='store_true', required=False)
     parser.add_argument('--run-statistics-grid-search', help="Run the statistics-based climber (SBC) starting from every possible quota configuration", action='store_true', required=False)
@@ -1086,6 +1104,9 @@ def main():
     
     if args.run_grid_search:
         run_grid_search(file.name, trace_name, cache_size)
+
+    if args.run_hit_ratio_grid_search:
+        run_grid_search(file.name, trace_name, cache_size, hit_ratio=True)
 
     if args.run_adaptive_grid_search:
         run_adaptive_grid_search(file.name, trace_name, cache_size)
