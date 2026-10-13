@@ -137,7 +137,7 @@ def addDelayAndWriteToFile(input_path: Path, output_path: Path, time_generators:
                     timestamp, key = line.split(' ')
                     timestamp = int(timestamp) * time_multiplier
                     key = key.strip(' \n')
-                    key = xxh3_64_intdigest(key, seed=hash_seed)
+                    key = xxh3_64_intdigest(key.encode('utf-8'), seed=hash_seed)
                     
                     chosen_dist = choose_dist(key, cluster_dists)
                     chosen_gen = time_generators[chosen_dist]

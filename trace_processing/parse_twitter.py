@@ -77,9 +77,9 @@ def process_csv_batches(input_file: Path, output_file: Path, batch_size: int = 1
 
 
 def extract_cluster_number(filename: str) -> str | None:
-    match = re.search(r'cluster(\d{2})', filename)
+    match = re.search(r'cluster(\d+)', filename)
     if match:
-        return match.group(1)
+        return match.group(1).zfill(2)
     return None
 
 
@@ -100,7 +100,7 @@ def main():
     cluster_number = extract_cluster_number(input_file.name)
     if cluster_number is None:
         print(f'[bold red]Error: Cannot extract cluster number from filename {input_file.name}')
-        print(f'[yellow]Expected format: clusterXX...')
+        print(f'[yellow]Expected format: clusterX... or clusterXX...')
         exit(1)
 
     output_dir = Path(args.output_path)
